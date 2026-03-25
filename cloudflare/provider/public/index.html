@@ -73,7 +73,7 @@
               </article>
             </div>
             <p class="story-caption">
-              Si necesitas volver a ingresar, utiliza tu c&oacute;digo de proveedor y tu correo registrado.
+              Cuando tu cuenta est&eacute; aprobada, podr&aacute;s ingresar con tu correo y tu contrase&ntilde;a.
             </p>
           </div>
         </section>
@@ -102,20 +102,64 @@
                   </div>
                   <span class="priority-badge">Principal</span>
                 </div>
-                <p class="muted section-copy">Si ya est&aacute;s registrado, entra con tu c&oacute;digo de proveedor y tu correo para revisar tu historial y solicitar una nueva cita.</p>
+                <p class="muted section-copy">Ingresa con tu correo y tu contrase&ntilde;a para revisar tu historial y solicitar una nueva cita.</p>
 
                 <form id="lookupForm" class="stack">
-                  <label>C&oacute;digo de proveedor
-                    <input name="vendorCode" required>
-                  </label>
                   <label>Correo registrado
                     <input name="email" type="email" required>
+                  </label>
+                  <label>Contrase&ntilde;a
+                    <input name="password" type="password" required>
                   </label>
                   <button type="submit" class="button primary wide">Ingresar</button>
                 </form>
 
+                <div class="inline-actions">
+                  <button id="forgotPasswordToggle" class="text-button" type="button">Olvid&eacute; mi contrase&ntilde;a</button>
+                  <button id="forgotEmailToggle" class="text-button" type="button">No recuerdo mi correo</button>
+                </div>
+
+                <div id="passwordRecoveryPanel" class="recovery-panel hidden">
+                  <h4>Recupera tu contrase&ntilde;a</h4>
+                  <p class="muted compact">Te enviaremos un c&oacute;digo de recuperaci&oacute;n al correo registrado.</p>
+                  <form id="passwordRecoveryRequestForm" class="stack dense">
+                    <label>Correo registrado
+                      <input name="email" type="email" required>
+                    </label>
+                    <button type="submit" class="button ghost wide">Enviar c&oacute;digo</button>
+                  </form>
+                  <form id="passwordResetForm" class="stack dense top-gap">
+                    <label>Correo registrado
+                      <input name="email" type="email" required>
+                    </label>
+                    <label>C&oacute;digo de recuperaci&oacute;n
+                      <input name="resetCode" required>
+                    </label>
+                    <label>Nueva contrase&ntilde;a
+                      <input name="password" type="password" required>
+                    </label>
+                    <label>Confirmar contrase&ntilde;a
+                      <input name="passwordConfirm" type="password" required>
+                    </label>
+                    <button type="submit" class="button secondary wide">Actualizar contrase&ntilde;a</button>
+                  </form>
+                </div>
+
+                <div id="emailRecoveryPanel" class="recovery-panel hidden">
+                  <h4>Recupera tu correo</h4>
+                  <p class="muted compact">Ingresa tu RUC para consultar el correo asociado. Si necesitas cambiarlo, solo Grupo Santis puede hacerlo.</p>
+                  <form id="emailRecoveryForm" class="stack dense">
+                    <label>RUC
+                      <input name="taxId" inputmode="numeric" required>
+                    </label>
+                    <button type="submit" class="button ghost wide">Consultar correo</button>
+                  </form>
+                  <div id="emailRecoveryResult" class="summary hidden"></div>
+                </div>
+
                 <div id="providerSummary" class="summary hidden"></div>
                 <div id="generatedCodeBox" class="summary hidden"></div>
+                <button id="logoutButton" class="button subtle wide hidden" type="button">Cerrar sesi&oacute;n</button>
                 <div id="warnings" class="stack"></div>
               </article>
 
@@ -142,12 +186,19 @@
                   <label>Correo obligatorio
                     <input name="email" type="email" required>
                   </label>
+                  <label>Contrase&ntilde;a
+                    <input name="password" type="password" required>
+                  </label>
+                  <label>Confirmar contrase&ntilde;a
+                    <input name="passwordConfirm" type="password" required>
+                  </label>
                   <label>Tel&eacute;fono
                     <input name="phone">
                   </label>
                   <label>Comentario: es importante para nosotros lo que tengas que decir.
                     <textarea name="notes" rows="3"></textarea>
                   </label>
+                  <p class="helper-text">El correo es obligatorio. Si m&aacute;s adelante necesitas cambiarlo, la actualizaci&oacute;n solo puede hacerla Grupo Santis.</p>
                   <button type="submit" class="button secondary wide">Registrarme</button>
                 </form>
               </article>

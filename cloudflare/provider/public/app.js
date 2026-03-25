@@ -1,13 +1,16 @@
 const API_BASE = "/api";
+const SESSION_STORAGE_KEY = "providerPortalSessionToken";
 
 let boot = null;
 let providerState = null;
 let selectedSlot = null;
 let appointmentsState = [];
+let sessionToken = "";
 
 document.addEventListener("DOMContentLoaded", async function () {
   wireEvents();
   await loadBootstrap();
+  await restoreSession();
 });
 
 function wireEvents() {
@@ -16,10 +19,21 @@ function wireEvents() {
       activateTab(button.getAttribute("data-tab-target"));
     });
   });
+
   document.getElementById("registerForm").addEventListener("submit", submitRegistration);
-  document.getElementById("lookupForm").addEventListener("submit", submitLookup);
+  document.getElementById("lookupForm").addEventListener("submit", submitLogin);
+  document.getElementById("passwordRecoveryRequestForm").addEventListener("submit", submitPasswordRecoveryRequest);
+  document.getElementById("passwordResetForm").addEventListener("submit", submitPasswordReset);
+  document.getElementById("emailRecoveryForm").addEventListener("submit", submitEmailRecovery);
   document.getElementById("refreshCalendar").addEventListener("click", refreshDashboard);
   document.getElementById("requestAppointmentButton").addEventListener("click", requestAppointment);
+  document.getElementById("logoutButton").addEventListener("click", logout);
+  document.getElementById("forgotPasswordToggle").addEventListener("click", function () {
+    togglePanel("passwordRecoveryPanel");
+  });
+  document.getElementById("forgotEmailToggle").addEventListener("click", function () {
+    togglePanel("emailRecoveryPanel");
+  });
 }
 
 async function loadBootstrap() {
@@ -30,6 +44,19 @@ async function loadBootstrap() {
   }
 }
 
+async function restoreSession() {
+  const storedToken = localStorage.getItem(SESSION_STORAGE_KEY) || "";
+  if (!storedToken) {
+    return;
+  }
+  sessionToken = storedToken;
+  try {
+    await refreshDashboard();
+  } catch (error) {
+    clearSession();
+  }
+}
+
 async function submitRegistration(event) {
   event.preventDefault();
   const payload = formToObject(event.target);
@@ -37,64 +64,110 @@ async function submitRegistration(event) {
   try {
     const response = await api("registerProvider", payload);
     showMessage(response.message, "success");
-
-    const generatedCodeBox = document.getElementById("generatedCodeBox");
-    generatedCodeBox.classList.remove("hidden");
-    generatedCodeBox.innerHTML = [
-      '<p class="eyebrow">C\u00d3DIGO GENERADO</p>',
-      '<p><strong>' + escapeHtml(response.provider.vendorCode) + '</strong></p>',
-      '<p>Guarda este c\u00f3digo. Lo usar\u00e1s junto con tu correo para volver a ingresar.</p>'
-    ].join("");
-
+    handleAuthenticatedResponse(response);
+    showGeneratedCode(response.dashboard && response.dashboard.provider ? response.dashboard.provider.vendorCode : "");
     activateTab("loginPanel");
-    document.getElementById("lookupForm").vendorCode.value = response.provider.vendorCode;
-    document.getElementById("lookupForm").email.value = response.provider.email;
-    await lookupProvider(response.provider.vendorCode, response.provider.email);
+    document.getElementById("lookupForm").email.value = payload.email || "";
+    document.getElementById("lookupForm").password.value = payload.password || "";
   } catch (error) {
     showMessage(error.message || "No pudimos completar tu registro en este momento. Intenta nuevamente en unos minutos.", "error");
   }
 }
 
-async function submitLookup(event) {
+async function submitLogin(event) {
   event.preventDefault();
-  activateTab("loginPanel");
-  await lookupProvider(event.target.vendorCode.value, event.target.email.value);
-}
-
-async function lookupProvider(vendorCode, email) {
-  selectedSlot = null;
-  document.getElementById("selectedSlotLabel").textContent = "Ninguna";
+  const payload = formToObject(event.target);
 
   try {
-    const data = await api("providerDashboard", {
-      vendorCode: vendorCode,
-      email: email,
-      startDate: boot && boot.today ? boot.today : null
-    });
-    renderDashboard(data);
+    const response = await api("providerLogin", payload);
+    showMessage("Ingreso correcto.", "success");
+    handleAuthenticatedResponse(response);
   } catch (error) {
-    resetProviderView();
-    showMessage(error.message || "No pudimos consultar tu informaci\u00f3n en este momento. Intenta nuevamente en unos minutos.", "error");
+    showMessage(error.message || "No pudimos iniciar sesi\u00f3n en este momento.", "error");
   }
+}
+
+async function submitPasswordRecoveryRequest(event) {
+  event.preventDefault();
+  const payload = formToObject(event.target);
+
+  try {
+    const response = await api("requestPasswordReset", payload);
+    showMessage(response.message, "success");
+  } catch (error) {
+    showMessage(error.message || "No pudimos procesar la recuperaci\u00f3n en este momento.", "error");
+  }
+}
+
+async function submitPasswordReset(event) {
+  event.preventDefault();
+  const payload = formToObject(event.target);
+
+  try {
+    const response = await api("resetPassword", payload);
+    showMessage(response.message, "success");
+    document.getElementById("lookupForm").email.value = payload.email || "";
+    document.getElementById("lookupForm").password.value = "";
+    document.getElementById("passwordResetForm").reset();
+    document.getElementById("passwordRecoveryPanel").classList.add("hidden");
+    activateTab("loginPanel");
+  } catch (error) {
+    showMessage(error.message || "No pudimos actualizar la contrase\u00f1a en este momento.", "error");
+  }
+}
+
+async function submitEmailRecovery(event) {
+  event.preventDefault();
+  const payload = formToObject(event.target);
+
+  try {
+    const response = await api("recoverEmailByTaxId", payload);
+    const result = document.getElementById("emailRecoveryResult");
+    result.classList.remove("hidden");
+    result.innerHTML = "<p><strong>" + escapeHtml(response.maskedEmail) + "</strong></p><p>" + escapeHtml(response.message) + "</p>";
+    showMessage("Consulta realizada correctamente.", "success");
+  } catch (error) {
+    showMessage(error.message || "No pudimos recuperar el correo en este momento.", "error");
+  }
+}
+
+function handleAuthenticatedResponse(response) {
+  sessionToken = response.sessionToken || "";
+  if (sessionToken) {
+    localStorage.setItem(SESSION_STORAGE_KEY, sessionToken);
+  }
+  if (response.dashboard) {
+    renderDashboard(response.dashboard);
+  }
+  document.getElementById("logoutButton").classList.remove("hidden");
 }
 
 async function refreshDashboard() {
-  if (!providerState) {
+  if (!sessionToken) {
     return;
   }
-  await lookupProvider(providerState.vendorCode, providerState.email);
+
+  const data = await api("providerDashboard", {
+    sessionToken: sessionToken,
+    startDate: boot && boot.today ? boot.today : null
+  });
+  renderDashboard(data);
 }
 
 function renderDashboard(data) {
   if (!data.found) {
+    clearSession();
     resetProviderView();
-    showMessage(data.message || "Proveedor no encontrado.", "error");
+    showMessage(data.message || "No encontramos tu cuenta.", "error");
     return;
   }
 
   activateTab("loginPanel");
   providerState = data.provider;
   appointmentsState = data.appointments || [];
+  selectedSlot = null;
+  document.getElementById("selectedSlotLabel").textContent = "Ninguna";
+  document.getElementById("logoutButton").classList.remove("hidden");
 
   const summary = document.getElementById("providerSummary");
   summary.classList.remove("hidden");
@@ -205,8 +278,8 @@ function renderAppointments(appointments) {
 }
 
 async function requestAppointment() {
-  if (!providerState) {
-    showMessage("Primero inicia sesi\u00f3n con tu c\u00f3digo y correo.", "error");
+  if (!providerState || !sessionToken) {
+    showMessage("Primero inicia sesi\u00f3n con una cuenta v\u00e1lida.", "error");
     return;
   }
   if (!selectedSlot) {
@@ -216,9 +289,8 @@ async function requestAppointment() {
 
   try {
     const response = await api("requestAppointment", {
+      sessionToken: sessionToken,
       providerId: providerState.providerId,
-      vendorCode: providerState.vendorCode,
-      email: providerState.email,
       startIso: selectedSlot.startIso,
       ocNumber: document.getElementById("appointmentOc").value,
       notes: document.getElementById("appointmentNotes").value
@@ -228,6 +300,36 @@ async function requestAppointment() {
   } catch (error) {
     showMessage(error.message || "No pudimos registrar tu solicitud en este momento. Intenta nuevamente en unos minutos.", "error");
   }
+}
+
+function logout() {
+  clearSession();
+  resetProviderView();
+  activateTab("loginPanel");
+  showMessage("Tu sesi\u00f3n fue cerrada.", "success");
+}
+
+function clearSession() {
+  sessionToken = "";
+  localStorage.removeItem(SESSION_STORAGE_KEY);
+}
+
+function togglePanel(panelId) {
+  const panel = document.getElementById(panelId);
+  panel.classList.toggle("hidden");
+}
+
+function showGeneratedCode(vendorCode) {
+  if (!vendorCode) {
+    return;
+  }
+  const generatedCodeBox = document.getElementById("generatedCodeBox");
+  generatedCodeBox.classList.remove("hidden");
+  generatedCodeBox.innerHTML = [
+    '<p class="eyebrow">C\u00d3DIGO GENERADO</p>',
+    '<p><strong>' + escapeHtml(vendorCode) + "</strong></p>",
+    "<p>Conserva este c\u00f3digo como referencia de tu cuenta dentro del portal.</p>"
+  ].join("");
 }
 
 function downloadAppointment(appointmentId) {
@@ -298,7 +400,7 @@ async function api(action, payload) {
   try {
     data = JSON.parse(text);
   } catch (error) {
-    throw new Error("No pudimos cargar la disponibilidad en este momento. Intenta nuevamente en unos minutos.");
+    throw new Error("No pudimos completar la operaci\u00f3n en este momento. Intenta nuevamente en unos minutos.");
   }
 
   if (!response.ok || !data.ok) {
@@ -356,11 +458,14 @@ function normalizeUserError(message) {
 function resetProviderView() {
   providerState = null;
   appointmentsState = [];
+  selectedSlot = null;
   document.getElementById("providerSummary").classList.add("hidden");
   document.getElementById("generatedCodeBox").classList.add("hidden");
   document.getElementById("appointmentPanel").classList.add("hidden");
   document.getElementById("appointmentsHistory").classList.add("hidden");
   document.getElementById("warnings").innerHTML = "";
+  document.getElementById("emailRecoveryResult").classList.add("hidden");
+  document.getElementById("logoutButton").classList.add("hidden");
 }
 
 function escapeHtml(value) {

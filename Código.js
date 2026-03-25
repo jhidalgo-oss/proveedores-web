@@ -27,6 +27,15 @@ var APPOINTMENT_STATUS = {
   CANCELLED: 'CANCELADA'
 };
 
+var SENSITIVE_FIELDS = {
+  passwordHash: true,
+  passwordSalt: true,
+  resetTokenHash: true,
+  resetTokenExpiresAt: true,
+  sessionTokenHash: true,
+  sessionTokenExpiresAt: true
+};
+
 var SHEET_HEADERS = {};
 SHEET_HEADERS[APP_DEFAULTS.sheets.providers] = [
   'providerId',
@@ -43,7 +52,13 @@ SHEET_HEADERS[APP_DEFAULTS.sheets.providers] = [
   'updatedAt',
   'approvedBy',
   'approvedAt',
-  'notes'
+  'notes',
+  'passwordHash',
+  'passwordSalt',
+  'resetTokenHash',
+  'resetTokenExpiresAt',
+  'sessionTokenHash',
+  'sessionTokenExpiresAt'
 ];
 SHEET_HEADERS[APP_DEFAULTS.sheets.appointments] = [
   'appointmentId',
@@ -138,10 +153,18 @@ function routeApiAction_(action, payload) {
   switch (action) {
     case 'providerBootstrap':
       return getBootstrapData_('proveedor');
+    case 'providerLogin':
+      return providerLogin(payload);
     case 'providerDashboard':
       return getProviderDashboard(payload);
     case 'registerProvider':
       return registerProvider(payload);
+    case 'requestPasswordReset':
+      return requestPasswordReset(payload);
+    case 'resetPassword':
+      return resetPassword(payload);
+    case 'recoverEmailByTaxId':
+      return recoverEmailByTaxId(payload);
     case 'requestAppointment':
       return requestAppointment(payload);
     case 'health':
@@ -1204,4 +1227,548 @@ function jsonResponse_(payload) {
   return ContentService
     .createTextOutput(JSON.stringify(payload))
     .setMimeType(ContentService.MimeType.JSON);
+}
+
+// Authentication and account flow overrides for provider portal.
+function getProviderDashboard(criteria) {
+  ensureSheets_();
+  criteria = criteria || {};
+  var provider = criteria.sessionToken
+    ? getProviderBySession_(criteria.sessionToken)
+    : findProvider_(criteria);
+  if (!provider) {
+    return {
+      found: false,
+      message: 'No encontramos una cuenta activa con esos datos.'
+    };
+  }
+  return buildProviderDashboardResponse_(provider, criteria.startDate || formatDate_(new Date()));
+}
+
+function providerLogin(payload) {
+  ensureSheets_();
+  payload = payload || {};
+  var clean = normalizeLoginPayload_(payload);
+  var provider = findProvider_({ email: clean.email });
+  if (!provider || !provider.passwordHash) {
+    throw new Error('No encontramos una cuenta activa con ese correo.');
+  }
+  if (!verifyPassword_(clean.password, provider.passwordSalt, provider.passwordHash)) {
+    throw new Error('La contrasena no es correcta.');
+  }
+  return createAuthenticatedProviderResponse_(provider, payload.startDate || formatDate_(new Date()));
+}
+
+function registerProvider(payload) {
+  ensureSheets_();
+  var clean = normalizeProviderPayload_(payload);
+  var sapResult = validateVendorAgainstSap_(clean.sapVendorCode, clean.taxId);
+  if (!sapResult.matched) {
+    throw new Error('Solo pueden registrarse proveedores existentes en SAP.');
+  }
+  if (!sapResult.active) {
+    throw new Error('El proveedor existe en SAP pero no esta habilitado para este proceso. Contacta a Grupo Santis.');
+  }
+
+  var existing = findProvider_({
+    taxId: clean.taxId,
+    vendorCode: sapResult.sapVendorCode || clean.sapVendorCode,
+    email: clean.email
+  });
+
+  if (existing && existing.email && !sameText_(existing.email, clean.email)) {
+    throw new Error('Este proveedor ya tiene un correo registrado. El cambio de correo solo puede hacerlo Grupo Santis.');
+  }
+  if (existing && existing.passwordHash) {
+    throw new Error('Este proveedor ya tiene una cuenta activa. Usa el inicio de sesion o la recuperacion de contrasena.');
+  }
+
+  var now = nowIso_();
+  var salt = generateSalt_();
+  var record = existing || {};
+  record.providerId = record.providerId || nextId_('PRV');
+  record.vendorCode = record.vendorCode || generateProviderCode_();
+  record.vendorName = sapResult.vendorName || clean.vendorName;
+  record.taxId = clean.taxId;
+  record.contactName = clean.contactName;
+  record.email = clean.email;
+  record.phone = clean.phone;
+  record.ocNumber = record.ocNumber || '';
+  record.sapStatus = sapResult.status;
+  record.createdAt = record.createdAt || now;
+  record.updatedAt = now;
+  record.notes = clean.notes;
+  record.passwordSalt = salt;
+  record.passwordHash = hashSecret_(clean.password, salt);
+  record.resetTokenHash = '';
+  record.resetTokenExpiresAt = '';
+
+  if (record.registrationStatus !== PROVIDER_STATUS.APPROVED) {
+    record.registrationStatus = PROVIDER_STATUS.PENDING;
+    record.approvedBy = '';
+    record.approvedAt = '';
+  }
+
+  saveRecord_(APP_DEFAULTS.sheets.providers, record, 'providerId', existing && existing._rowNumber);
+  audit_('PROVEEDOR_REGISTRO', record.providerId, record.email, 'Proveedor registrado con cuenta y contrasena.');
+
+  var authResponse = createAuthenticatedProviderResponse_(record, formatDate_(new Date()));
+  authResponse.message = record.registrationStatus === PROVIDER_STATUS.APPROVED
+    ? 'Tu cuenta fue activada correctamente. Ya puedes solicitar citas.'
+    : 'Tu cuenta fue creada. Grupo Santis validara y autorizara tu alta antes de solicitar citas.';
+  authResponse.sap = sapResult;
+  return authResponse;
+}
+
+function requestPasswordReset(payload) {
+  ensureSheets_();
+  payload = payload || {};
+  var email = String(payload.email || '').trim().toLowerCase();
+  if (!email || !isValidEmail_(email)) {
+    throw new Error('Ingresa un correo valido.');
+  }
+  var provider = findProvider_({ email: email });
+  if (provider && provider.passwordHash) {
+    var recoveryCode = generateRecoveryCode_();
+    provider.resetTokenHash = hashPlain_(recoveryCode);
+    provider.resetTokenExpiresAt = formatDateTime_(addMinutes_(new Date(), 30));
+    provider.updatedAt = nowIso_();
+    saveRecord_(APP_DEFAULTS.sheets.providers, provider, 'providerId', provider._rowNumber);
+    sendPasswordResetEmail_(provider, recoveryCode);
+    audit_('PASSWORD_RESET_REQUEST', provider.providerId, provider.email, 'Solicitud de recuperacion enviada.');
+  }
+  return {
+    ok: true,
+    message: 'Si encontramos una cuenta con ese correo, te enviaremos instrucciones de recuperacion.'
+  };
+}
+
+function resetPassword(payload) {
+  ensureSheets_();
+  payload = payload || {};
+  var clean = normalizePasswordResetPayload_(payload);
+  var provider = findProvider_({ email: clean.email });
+  if (!provider || !provider.resetTokenHash) {
+    throw new Error('La solicitud de recuperacion no es valida o ya expiro.');
+  }
+  if (provider.resetTokenExpiresAt && parseLocalDateTime_(provider.resetTokenExpiresAt) < new Date()) {
+    throw new Error('La solicitud de recuperacion ya expiro. Solicita una nueva.');
+  }
+  if (provider.resetTokenHash !== hashPlain_(clean.resetCode)) {
+    throw new Error('El codigo de recuperacion no es correcto.');
+  }
+
+  var salt = generateSalt_();
+  provider.passwordSalt = salt;
+  provider.passwordHash = hashSecret_(clean.password, salt);
+  provider.resetTokenHash = '';
+  provider.resetTokenExpiresAt = '';
+  provider.sessionTokenHash = '';
+  provider.sessionTokenExpiresAt = '';
+  provider.updatedAt = nowIso_();
+  saveRecord_(APP_DEFAULTS.sheets.providers, provider, 'providerId', provider._rowNumber);
+  audit_('PASSWORD_RESET_SUCCESS', provider.providerId, provider.email, 'Contrasena restablecida.');
+
+  return {
+    ok: true,
+    message: 'Tu contrasena fue actualizada. Ya puedes iniciar sesion.'
+  };
+}
+
+function recoverEmailByTaxId(payload) {
+  ensureSheets_();
+  payload = payload || {};
+  var taxId = digitsOnly_(payload.taxId);
+  if (!taxId) {
+    throw new Error('Ingresa un RUC valido.');
+  }
+  var provider = findProvider_({ taxId: taxId });
+  if (!provider || !provider.email) {
+    throw new Error('No encontramos una cuenta registrada con ese RUC.');
+  }
+  return {
+    ok: true,
+    message: 'El correo asociado a este RUC es ' + maskEmail_(provider.email) + '. Si necesitas cambiarlo, solo Grupo Santis puede hacerlo.',
+    maskedEmail: maskEmail_(provider.email)
+  };
+}
+
+function requestAppointment(payload) {
+  ensureSheets_();
+  payload = payload || {};
+  var clean = normalizeAppointmentRequest_(payload);
+  var provider = clean.sessionToken
+    ? getProviderBySession_(clean.sessionToken)
+    : findProvider_({
+        providerId: clean.providerId,
+        vendorCode: clean.vendorCode,
+        email: clean.email
+      });
+
+  if (!provider) {
+    throw new Error('Primero inicia sesion con una cuenta valida.');
+  }
+  if (provider.registrationStatus !== PROVIDER_STATUS.APPROVED) {
+    throw new Error('El proveedor aun no esta aprobado por Grupo Santis.');
+  }
+
+  var slotStart = parseLocalDateTime_(clean.startIso);
+  validateSlotRequest_(slotStart);
+  assertSlotAvailable_(clean.startIso, '');
+
+  var slotEnd = addMinutes_(slotStart, getRuntimeConfig_().slotMinutes);
+  var appointment = {
+    appointmentId: nextId_('CIT'),
+    providerId: provider.providerId,
+    vendorCode: provider.vendorCode,
+    vendorName: provider.vendorName,
+    email: provider.email,
+    ocNumber: clean.ocNumber || provider.ocNumber || '',
+    requestedStart: clean.startIso,
+    requestedEnd: formatDateTime_(slotEnd),
+    effectiveStart: clean.startIso,
+    effectiveEnd: formatDateTime_(slotEnd),
+    slotDate: formatDate_(slotStart),
+    slotLabel: formatSlotLabel_(slotStart, slotEnd),
+    appointmentStatus: APPOINTMENT_STATUS.PENDING,
+    outsideSchedule: 'NO',
+    requestedAt: nowIso_(),
+    approvedAt: '',
+    approvedBy: '',
+    accessCode: '',
+    mailSentAt: '',
+    notes: clean.notes
+  };
+
+  saveRecord_(APP_DEFAULTS.sheets.appointments, appointment, 'appointmentId');
+  audit_('CITA_SOLICITADA', appointment.appointmentId, provider.email, appointment.slotLabel);
+
+  return {
+    ok: true,
+    message: 'Tu solicitud de cita fue registrada y queda pendiente de aprobacion.',
+    appointment: cleanRow_(appointment)
+  };
+}
+
+function buildProviderDashboardResponse_(provider, startDate) {
+  var config = getRuntimeConfig_();
+  return {
+    found: true,
+    provider: cleanRow_(provider),
+    warnings: buildProviderWarnings_(provider),
+    appointments: getProviderAppointments_(provider.providerId),
+    canRequestAppointments: provider.registrationStatus === PROVIDER_STATUS.APPROVED,
+    calendar: provider.registrationStatus === PROVIDER_STATUS.APPROVED
+      ? buildCalendar_(startDate, config.lookaheadDays, false)
+      : null
+  };
+}
+
+function createAuthenticatedProviderResponse_(provider, startDate) {
+  var session = createProviderSession_(provider);
+  return {
+    ok: true,
+    message: 'Sesion iniciada correctamente.',
+    sessionToken: session.token,
+    sessionExpiresAt: session.expiresAt,
+    dashboard: buildProviderDashboardResponse_(provider, startDate || formatDate_(new Date()))
+  };
+}
+
+function createProviderSession_(provider) {
+  var token = Utilities.getUuid().replace(/-/g, '') + Utilities.getUuid().replace(/-/g, '');
+  provider.sessionTokenHash = hashPlain_(token);
+  provider.sessionTokenExpiresAt = formatDateTime_(addDays_(new Date(), 1));
+  provider.updatedAt = nowIso_();
+  saveRecord_(APP_DEFAULTS.sheets.providers, provider, 'providerId', provider._rowNumber);
+  return {
+    token: token,
+    expiresAt: provider.sessionTokenExpiresAt
+  };
+}
+
+function getProviderBySession_(sessionToken) {
+  if (!sessionToken) {
+    return null;
+  }
+  var tokenHash = hashPlain_(String(sessionToken || '').trim());
+  var provider = getSheetData_(APP_DEFAULTS.sheets.providers).find(function(row) {
+    return row.sessionTokenHash && row.sessionTokenHash === tokenHash;
+  });
+  if (!provider) {
+    return null;
+  }
+  if (provider.sessionTokenExpiresAt && parseLocalDateTime_(provider.sessionTokenExpiresAt) < new Date()) {
+    provider.sessionTokenHash = '';
+    provider.sessionTokenExpiresAt = '';
+    saveRecord_(APP_DEFAULTS.sheets.providers, provider, 'providerId', provider._rowNumber);
+    return null;
+  }
+  return provider;
+}
+
+function normalizeProviderPayload_(payload) {
+  payload = payload || {};
+  var email = String(payload.email || '').trim().toLowerCase();
+  var taxId = digitsOnly_(payload.taxId);
+  var sapVendorCode = digitsOnly_(payload.sapVendorCode || '');
+  var password = String(payload.password || '').trim();
+  var passwordConfirm = String(payload.passwordConfirm || '').trim();
+
+  if (!taxId) {
+    throw new Error('El RUC o documento es obligatorio.');
+  }
+  if (!email || !isValidEmail_(email)) {
+    throw new Error('Debes registrar un correo valido.');
+  }
+  validatePasswordStrength_(password);
+  if (password !== passwordConfirm) {
+    throw new Error('La confirmacion de contrasena no coincide.');
+  }
+
+  return {
+    vendorName: String(payload.vendorName || '').trim(),
+    taxId: taxId,
+    sapVendorCode: sapVendorCode,
+    contactName: String(payload.contactName || '').trim(),
+    email: email,
+    phone: String(payload.phone || '').trim(),
+    notes: String(payload.notes || '').trim(),
+    password: password
+  };
+}
+
+function normalizeLoginPayload_(payload) {
+  var email = String(payload.email || '').trim().toLowerCase();
+  var password = String(payload.password || '').trim();
+  if (!email || !isValidEmail_(email)) {
+    throw new Error('Ingresa un correo valido.');
+  }
+  if (!password) {
+    throw new Error('Ingresa tu contrasena.');
+  }
+  return {
+    email: email,
+    password: password
+  };
+}
+
+function normalizePasswordResetPayload_(payload) {
+  var email = String(payload.email || '').trim().toLowerCase();
+  var resetCode = String(payload.resetCode || '').trim().toUpperCase();
+  var password = String(payload.password || '').trim();
+  var passwordConfirm = String(payload.passwordConfirm || '').trim();
+  if (!email || !isValidEmail_(email)) {
+    throw new Error('Ingresa un correo valido.');
+  }
+  if (!resetCode) {
+    throw new Error('Ingresa el codigo de recuperacion.');
+  }
+  validatePasswordStrength_(password);
+  if (password !== passwordConfirm) {
+    throw new Error('La confirmacion de contrasena no coincide.');
+  }
+  return {
+    email: email,
+    resetCode: resetCode,
+    password: password
+  };
+}
+
+function normalizeAppointmentRequest_(payload) {
+  payload = payload || {};
+  var email = String(payload.email || '').trim().toLowerCase();
+  var vendorCode = digitsOnly_(payload.vendorCode);
+  var ocNumber = digitsOnly_(payload.ocNumber || '');
+  var startIso = String(payload.startIso || '').trim();
+  var sessionToken = String(payload.sessionToken || '').trim();
+
+  if (!sessionToken) {
+    if (!vendorCode) {
+      throw new Error('Falta el codigo del proveedor.');
+    }
+    if (!email || !isValidEmail_(email)) {
+      throw new Error('Falta un correo valido.');
+    }
+  }
+  if (!startIso) {
+    throw new Error('Selecciona un horario.');
+  }
+  if (payload.ocNumber && !ocNumber) {
+    throw new Error('La OC solo debe contener numeros.');
+  }
+
+  return {
+    providerId: String(payload.providerId || '').trim(),
+    vendorCode: vendorCode,
+    email: email,
+    ocNumber: ocNumber,
+    startIso: trimToMinute_(startIso),
+    notes: String(payload.notes || '').trim(),
+    sessionToken: sessionToken
+  };
+}
+
+function validateVendorAgainstSap_(vendorCode, taxId) {
+  var catalog = getSheetData_(APP_DEFAULTS.sheets.sap);
+  var vendorDigits = digitsOnly_(vendorCode);
+  var taxDigits = digitsOnly_(taxId);
+  var match = catalog.find(function(row) {
+    var codeMatch = vendorDigits && digitsOnly_(row.vendorCode) === vendorDigits;
+    var taxMatch = taxDigits && digitsOnly_(row.taxId) === taxDigits;
+    return codeMatch || taxMatch;
+  });
+  if (!match) {
+    return {
+      catalogLoaded: catalog.length > 0,
+      matched: false,
+      status: catalog.length ? 'NO_ENCONTRADO' : 'SIN_PADRON',
+      vendorName: '',
+      sapVendorCode: '',
+      active: false
+    };
+  }
+  var isActive = !String(match.active || '').trim() || String(match.active).toUpperCase() === 'TRUE' || String(match.active).toUpperCase() === 'ACTIVO';
+  return {
+    catalogLoaded: true,
+    matched: true,
+    status: isActive ? 'VALIDADO' : 'INACTIVO',
+    vendorName: match.vendorName || '',
+    sapVendorCode: String(match.vendorCode || '').trim(),
+    active: isActive
+  };
+}
+
+function buildProviderWarnings_(provider) {
+  var warnings = [];
+  if (provider.sapStatus === 'SIN_PADRON') {
+    warnings.push('No hay un padron SAP cargado aun. La validacion se hara manualmente.');
+  }
+  if (provider.sapStatus === 'NO_ENCONTRADO') {
+    warnings.push('El proveedor no fue encontrado en SAP y debe revisarse manualmente.');
+  }
+  if (provider.registrationStatus === PROVIDER_STATUS.PENDING) {
+    warnings.push('Grupo Santis debe validar primero el alta del proveedor.');
+  }
+  if (provider.registrationStatus === PROVIDER_STATUS.APPROVED) {
+    warnings.push('Si necesitas cambiar tu correo, la actualizacion solo puede hacerla Grupo Santis.');
+  }
+  return warnings;
+}
+
+function findProvider_(criteria) {
+  criteria = criteria || {};
+  var providers = getSheetData_(APP_DEFAULTS.sheets.providers);
+  return providers.find(function(row) {
+    if (criteria.providerId && sameText_(row.providerId, criteria.providerId)) {
+      return true;
+    }
+    if (criteria.vendorCode && criteria.email) {
+      return sameText_(row.vendorCode, criteria.vendorCode) && sameText_(row.email, criteria.email);
+    }
+    if (criteria.taxId && digitsOnly_(row.taxId) === digitsOnly_(criteria.taxId)) {
+      return true;
+    }
+    if (criteria.vendorCode && sameText_(row.vendorCode, criteria.vendorCode)) {
+      return true;
+    }
+    if (criteria.email && sameText_(row.email, criteria.email)) {
+      return true;
+    }
+    return false;
+  });
+}
+
+function cleanRow_(row) {
+  var copy = {};
+  Object.keys(row).forEach(function(key) {
+    if (key.indexOf('_') === 0 || SENSITIVE_FIELDS[key]) {
+      return;
+    }
+    copy[key] = row[key];
+  });
+  return copy;
+}
+
+function validatePasswordStrength_(password) {
+  if (String(password || '').length < 8) {
+    throw new Error('La contrasena debe tener al menos 8 caracteres.');
+  }
+  if (!/[A-Za-z]/.test(password) || !/\d/.test(password)) {
+    throw new Error('La contrasena debe incluir letras y numeros.');
+  }
+}
+
+function generateSalt_() {
+  return Utilities.getUuid().replace(/-/g, '');
+}
+
+function hashSecret_(value, salt) {
+  return hashPlain_(String(salt || '') + '::' + String(value || ''));
+}
+
+function hashPlain_(value) {
+  var digest = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, String(value || ''), Utilities.Charset.UTF_8);
+  return digest.map(function(byte) {
+    var normalized = byte < 0 ? byte + 256 : byte;
+    return ('0' + normalized.toString(16)).slice(-2);
+  }).join('');
+}
+
+function verifyPassword_(password, salt, storedHash) {
+  return hashSecret_(password, salt) === storedHash;
+}
+
+function generateRecoveryCode_() {
+  return String(Math.floor(100000 + Math.random() * 900000));
+}
+
+function maskEmail_(email) {
+  var value = String(email || '').trim().toLowerCase();
+  var parts = value.split('@');
+  if (parts.length !== 2) {
+    return value;
+  }
+  var local = parts[0];
+  var domain = parts[1];
+  var visible = local.slice(0, 2);
+  return visible + '***@' + domain;
+}
+
+function sendPasswordResetEmail_(provider, recoveryCode) {
+  if (!provider.email) {
+    return;
+  }
+  var subject = 'Recuperacion de contrasena - Portal de proveedores';
+  var body = [
+    '<p>Hola ' + escapeHtml_(provider.contactName || provider.vendorName) + ',</p>',
+    '<p>Recibimos una solicitud para restablecer tu contrasena del portal de proveedores.</p>',
+    '<p>Usa este codigo de recuperacion: <strong style="font-size:20px;">' + escapeHtml_(recoveryCode) + '</strong></p>',
+    '<p>El codigo vence en 30 minutos.</p>',
+    '<p>Si no reconoces esta solicitud, ignora este correo.</p>'
+  ].join('');
+  MailApp.sendEmail({
+    to: provider.email,
+    subject: subject,
+    htmlBody: body
+  });
+}
+
+function sendProviderApprovalEmail_(provider) {
+  if (!provider.email) {
+    return;
+  }
+  var subject = 'Proveedor aprobado para solicitar citas';
+  var body = [
+    '<p>Hola ' + escapeHtml_(provider.contactName || provider.vendorName) + ',</p>',
+    '<p>Tu cuenta fue aprobada por Grupo Santis.</p>',
+    '<p>Desde este momento ya puedes ingresar al portal del proveedor con tu correo y tu contrasena para solicitar una cita disponible.</p>',
+    '<p>Proveedor: <strong>' + escapeHtml_(provider.vendorName) + '</strong><br>',
+    'Codigo de proveedor: <strong>' + escapeHtml_(provider.vendorCode) + '</strong></p>'
+  ].join('');
+  MailApp.sendEmail({
+    to: provider.email,
+    subject: subject,
+    htmlBody: body
+  });
 }

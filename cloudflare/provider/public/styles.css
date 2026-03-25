@@ -480,6 +480,10 @@ h3 {
   gap: 14px;
 }
 
+.top-gap {
+  margin-top: var(--space-2);
+}
+
 label {
   display: grid;
   gap: 8px;
@@ -584,6 +588,50 @@ textarea:disabled,
 
 .button.wide {
   width: 100%;
+}
+
+.text-button {
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--forest);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.inline-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-top: var(--space-2);
+}
+
+.recovery-panel {
+  margin-top: var(--space-2);
+  padding: var(--space-2);
+  border-radius: 16px;
+  border: 1px solid rgba(54, 41, 22, 0.08);
+  background: rgba(255, 255, 255, 0.74);
+}
+
+.recovery-panel h4 {
+  margin: 0 0 6px;
+  font-family: "Manrope", sans-serif;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.compact {
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.helper-text {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.55;
 }
 
 .message {
