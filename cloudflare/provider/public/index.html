@@ -15,10 +15,11 @@
           <div class="brand-copy">
             <span class="brand-kicker">PORTAL DE PROVEEDORES</span>
             <strong>Atenci&oacute;n de proveedores</strong>
+            <small>Gestiona tu acceso, tu historial y tus nuevas citas en una sola plataforma.</small>
           </div>
         </div>
         <div class="topbar-note">
-          Solicita tu cita, revisa tu historial y descarga tu constancia desde un solo lugar.
+          Plataforma oficial de coordinaci&oacute;n para atenci&oacute;n de proveedores.
         </div>
       </header>
 
@@ -28,7 +29,7 @@
             <span class="eyebrow">ATENCI&Oacute;N DIGITAL</span>
             <h1>Solicita tu cita y mejora tu experiencia</h1>
             <p class="story-copy">
-              Dise&ntilde;ado para que el registro, la solicitud y la validaci&oacute;n de citas se sientan claros, ordenados y profesionales desde el primer ingreso.
+              Un flujo claro para registrar a tu empresa, consultar disponibilidad y dar seguimiento a cada atenci&oacute;n con una experiencia m&aacute;s confiable, legible y ordenada.
             </p>
           </div>
 
@@ -56,32 +57,40 @@
             </li>
           </ol>
 
-          <div class="schedule-band">
-            <article class="schedule-card">
-              <span class="mini-label">Lunes a mi&eacute;rcoles</span>
-              <strong>08:00 - 16:00</strong>
-              <small>Atenci&oacute;n regular</small>
-            </article>
-            <article class="schedule-card">
-              <span class="mini-label">Jueves y viernes</span>
-              <strong>08:00 - 12:30</strong>
-              <small>Citas cada 30 minutos</small>
-            </article>
-            <article class="schedule-card">
-              <span class="mini-label">Confirmaci&oacute;n</span>
-              <strong>Correo y descarga</strong>
-              <small>Constancia digital disponible</small>
-            </article>
+          <div class="story-footer">
+            <div class="schedule-band">
+              <article class="schedule-card">
+                <span class="mini-label">Lunes a mi&eacute;rcoles</span>
+                <strong>08:00 - 16:00</strong>
+                <small>Atenci&oacute;n regular</small>
+              </article>
+              <article class="schedule-card">
+                <span class="mini-label">Jueves y viernes</span>
+                <strong>08:00 - 12:30</strong>
+                <small>Citas cada 30 minutos</small>
+              </article>
+              <article class="schedule-card">
+                <span class="mini-label">Confirmaci&oacute;n</span>
+                <strong>Correo y descarga</strong>
+                <small>Constancia digital disponible</small>
+              </article>
+            </div>
+            <p class="story-caption">
+              Si necesitas volver a ingresar, utiliza tu c&oacute;digo de proveedor y tu correo registrado.
+            </p>
           </div>
         </section>
 
         <aside class="access-column">
           <article class="login-card">
-            <div class="card-head">
-              <span class="eyebrow">ACCESO PRINCIPAL</span>
-              <h2>Inicia sesi&oacute;n</h2>
-              <p class="muted">Si ya est&aacute;s registrado, entra con tu c&oacute;digo de proveedor y tu correo para ver tu hist&oacute;rico y pedir una nueva cita.</p>
+            <div class="card-head major">
+              <div>
+                <span class="eyebrow">ACCESO PRINCIPAL</span>
+                <h2>Inicia sesi&oacute;n</h2>
+              </div>
+              <span class="priority-badge">Principal</span>
             </div>
+            <p class="muted section-copy">Si ya est&aacute;s registrado, entra con tu c&oacute;digo de proveedor y tu correo para revisar tu historial y solicitar una nueva cita.</p>
 
             <form id="lookupForm" class="stack">
               <label>C&oacute;digo de proveedor
@@ -100,10 +109,13 @@
 
           <article class="register-card">
             <div class="card-head">
-              <span class="eyebrow">REGISTRO</span>
-              <h2>Registra tu empresa</h2>
-              <p class="muted">Tu c&oacute;digo se genera autom&aacute;ticamente. Solo necesitas completar tus datos y el correo de contacto.</p>
+              <div>
+                <span class="eyebrow">REGISTRO</span>
+                <h2>Registra tu empresa</h2>
+              </div>
+              <span class="section-tag">Paso inicial</span>
             </div>
+            <p class="muted section-copy">Tu c&oacute;digo se genera autom&aacute;ticamente. Completa tus datos y deja un correo v&aacute;lido para futuras coordinaciones.</p>
 
             <form id="registerForm" class="stack dense">
               <label>Raz&oacute;n social
@@ -131,10 +143,15 @@
       </main>
 
       <section class="legend-strip">
-        <span class="legend-title">Estado del calendario</span>
-        <span class="legend-chip"><span class="chip chip-approved"></span>Aprobado</span>
-        <span class="legend-chip"><span class="chip chip-pending"></span>Pendiente de aprobaci&oacute;n</span>
-        <span class="legend-chip"><span class="chip chip-available"></span>Disponible</span>
+        <div class="legend-copy">
+          <span class="legend-title">Disponibilidad del calendario</span>
+          <p>Consulta el estado de cada bloque antes de solicitar tu atenci&oacute;n.</p>
+        </div>
+        <div class="legend-items">
+          <span class="legend-chip"><span class="chip chip-approved"></span>Aprobado</span>
+          <span class="legend-chip"><span class="chip chip-pending"></span>Pendiente de aprobaci&oacute;n</span>
+          <span class="legend-chip"><span class="chip chip-available"></span>Disponible</span>
+        </div>
       </section>
 
       <div id="message" class="message hidden"></div>

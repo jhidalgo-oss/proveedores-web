@@ -40,13 +40,15 @@ export async function onRequest(context) {
   const contentType = upstreamResponse.headers.get("content-type") || "";
 
   if (!contentType.includes("application/json")) {
+    console.warn("Apps Script upstream did not return JSON", {
+      action,
+      upstreamStatus: upstreamResponse.status,
+      contentType
+    });
+
     return json({
       ok: false,
-      error: "El backend de Apps Script no est\u00e1 devolviendo JSON. Revisa que el Web App est\u00e9 publicado para acceso p\u00fablico.",
-      debug: {
-        action,
-        upstreamStatus: upstreamResponse.status
-      }
+      error: "No pudimos cargar la disponibilidad en este momento. Intenta nuevamente en unos minutos."
     }, 502);
   }
 

@@ -21,7 +21,7 @@ async function loadBootstrap() {
   try {
     boot = await api("providerBootstrap", {});
   } catch (error) {
-    showMessage(error.message || "No se pudo inicializar la p\u00e1gina.", "error");
+    showMessage(error.message || "No pudimos cargar la plataforma en este momento. Intenta nuevamente en unos minutos.", "error");
   }
 }
 
@@ -45,7 +45,7 @@ async function submitRegistration(event) {
     document.getElementById("lookupForm").email.value = response.provider.email;
     await lookupProvider(response.provider.vendorCode, response.provider.email);
   } catch (error) {
-    showMessage(error.message, "error");
+    showMessage(error.message || "No pudimos completar tu registro en este momento. Intenta nuevamente en unos minutos.", "error");
   }
 }
 
@@ -67,7 +67,7 @@ async function lookupProvider(vendorCode, email) {
     renderDashboard(data);
   } catch (error) {
     resetProviderView();
-    showMessage(error.message, "error");
+    showMessage(error.message || "No pudimos consultar tu informaci\u00f3n en este momento. Intenta nuevamente en unos minutos.", "error");
   }
 }
 
@@ -218,7 +218,7 @@ async function requestAppointment() {
     showMessage(response.message, "success");
     await refreshDashboard();
   } catch (error) {
-    showMessage(error.message, "error");
+    showMessage(error.message || "No pudimos registrar tu solicitud en este momento. Intenta nuevamente en unos minutos.", "error");
   }
 }
 
@@ -290,11 +290,11 @@ async function api(action, payload) {
   try {
     data = JSON.parse(text);
   } catch (error) {
-    throw new Error("El servicio no respondi\u00f3 correctamente. Verifica la publicaci\u00f3n del backend de Apps Script.");
+    throw new Error("No pudimos cargar la disponibilidad en este momento. Intenta nuevamente en unos minutos.");
   }
 
   if (!response.ok || !data.ok) {
-    throw new Error(data.error || "No se pudo completar la operaci\u00f3n.");
+    throw new Error(normalizeUserError(data.error));
   }
 
   return data.data;
@@ -309,6 +309,26 @@ function showMessage(text, type) {
   const box = document.getElementById("message");
   box.textContent = text;
   box.className = "message " + type;
+}
+
+function normalizeUserError(message) {
+  const value = String(message || "").toLowerCase();
+
+  if (!value) {
+    return "No se pudo completar la operaci\u00f3n. Intenta nuevamente en unos minutos.";
+  }
+
+  if (
+    value.indexOf("json") >= 0 ||
+    value.indexOf("apps script") >= 0 ||
+    value.indexOf("backend") >= 0 ||
+    value.indexOf("web app") >= 0 ||
+    value.indexOf("upstream") >= 0
+  ) {
+    return "No pudimos cargar la disponibilidad en este momento. Intenta nuevamente en unos minutos.";
+  }
+
+  return message;
 }
 
 function resetProviderView() {
