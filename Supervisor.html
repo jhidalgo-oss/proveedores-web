@@ -212,6 +212,8 @@
               <strong>${escapeHtml(item.vendorName)}</strong>
               <p>${escapeHtml(item.slotDate)} | ${escapeHtml(item.slotLabel)} | ${escapeHtml(item.email)}</p>
               <p>OC: ${escapeHtml(item.ocNumber || '')}</p>
+              <p>Area: ${escapeHtml(item.ocArea || 'Sin definir')} | Entrega: ${escapeHtml(item.ocDeliveryDate || 'Sin fecha')}</p>
+              <p>Resumen OC: ${escapeHtml(item.ocItemsSummary || 'Sin detalle disponible')}</p>
               <div class="inline">
                 <button class="button primary" type="button" onclick="approveAppointmentAction('${item.appointmentId}')">Aprobar</button>
                 <button class="button" type="button" onclick="reassignAppointmentAction('${item.appointmentId}', '${item.effectiveStart}')">Reasignar</button>
@@ -233,6 +235,8 @@
           return `
             <tr>
               <td>${escapeHtml(item.vendorName)}</td>
+              <td>${escapeHtml(item.ocNumber || '')}</td>
+              <td>${escapeHtml(item.ocArea || '')}</td>
               <td>${escapeHtml(item.slotDate)}</td>
               <td>${escapeHtml(item.slotLabel)}</td>
               <td>${escapeHtml(item.outsideSchedule === 'SI' ? 'Si' : 'No')}</td>
@@ -243,7 +247,7 @@
         wrapper.innerHTML = `
           <table>
             <thead>
-              <tr><th>Proveedor</th><th>Fecha</th><th>Hora</th><th>Fuera horario</th></tr>
+              <tr><th>Proveedor</th><th>OC</th><th>Area</th><th>Fecha</th><th>Hora</th><th>Fuera horario</th></tr>
             </thead>
             <tbody>${rows}</tbody>
           </table>

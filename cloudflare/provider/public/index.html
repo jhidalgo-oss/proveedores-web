@@ -239,9 +239,12 @@
               <h3>Cita seleccionada</h3>
               <p id="selectedSlotLabel">Ninguna</p>
             </div>
-            <label>OC opcional
-              <input id="appointmentOc" inputmode="numeric" placeholder="Solo n&uacute;meros">
+            <label>OC abierta
+              <select id="appointmentOc">
+                <option value="">Selecciona una OC abierta</option>
+              </select>
             </label>
+            <div id="appointmentOcSummary" class="note hidden"></div>
             <label>Notas
               <textarea id="appointmentNotes" rows="4" placeholder="Detalle de visita, carga, descarga o informaci&oacute;n adicional."></textarea>
             </label>

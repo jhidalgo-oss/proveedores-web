@@ -41,6 +41,7 @@ var SHEET_HEADERS = {};
 SHEET_HEADERS[APP_DEFAULTS.sheets.providers] = [
   'providerId',
   'vendorCode',
+  'sapVendorCode',
   'vendorName',
   'taxId',
   'contactName',
@@ -65,9 +66,14 @@ SHEET_HEADERS[APP_DEFAULTS.sheets.appointments] = [
   'appointmentId',
   'providerId',
   'vendorCode',
+  'sapVendorCode',
   'vendorName',
   'email',
   'ocNumber',
+  'ocArea',
+  'ocItemsSummary',
+  'ocDeliveryDate',
+  'ocLineCount',
   'requestedStart',
   'requestedEnd',
   'effectiveStart',
@@ -488,11 +494,13 @@ function getSupervisorDashboard(options) {
     pendingAppointments: appointments
       .filter(function(row) { return row.appointmentStatus === APPOINTMENT_STATUS.PENDING; })
       .sort(sortByDateField_('effectiveStart'))
+      .map(enrichAppointmentWithOpenOrderContext_)
       .map(cleanRow_),
     approvedAppointments: appointments
       .filter(function(row) { return row.appointmentStatus === APPOINTMENT_STATUS.APPROVED; })
       .sort(sortByDateField_('effectiveStart'))
       .slice(0, 25)
+      .map(enrichAppointmentWithOpenOrderContext_)
       .map(cleanRow_),
     calendar: buildCalendar_(startDate, getRuntimeConfig_().lookaheadDays, true),
     stats: {
@@ -678,9 +686,14 @@ function createManualAppointment(payload) {
     appointmentId: nextId_('CIT'),
     providerId: provider.providerId,
     vendorCode: provider.vendorCode,
+    sapVendorCode: provider.sapVendorCode || '',
     vendorName: provider.vendorName,
     email: provider.email,
     ocNumber: clean.ocNumber || provider.ocNumber || '',
+    ocArea: '',
+    ocItemsSummary: '',
+    ocDeliveryDate: '',
+    ocLineCount: '',
     requestedStart: formatDateTime_(targetStart),
     requestedEnd: formatDateTime_(slotEnd),
     effectiveStart: formatDateTime_(targetStart),
@@ -696,6 +709,7 @@ function createManualAppointment(payload) {
     mailSentAt: '',
     notes: clean.notes || 'Cita manual coordinada por supervisor.'
   };
+  applyPurchaseOrderSnapshot_(appointment, getPendingPurchaseOrderForProvider_(provider, appointment.ocNumber));
 
   saveRecord_(APP_DEFAULTS.sheets.appointments, appointment, 'appointmentId');
   sendAppointmentEmail_(appointment, false);
@@ -919,6 +933,7 @@ function getProviderAppointments_(providerId) {
   return getSheetData_(APP_DEFAULTS.sheets.appointments)
     .filter(function(row) { return sameText_(row.providerId, providerId); })
     .sort(sortByDateField_('effectiveStart'))
+    .map(enrichAppointmentWithOpenOrderContext_)
     .map(cleanRow_);
 }
 
@@ -1570,6 +1585,8 @@ function sendAppointmentEmail_(appointment, isReschedule) {
     '<tr><td style="padding:4px 10px 4px 0;"><strong>Hora</strong></td><td>' + escapeHtml_(appointment.slotLabel) + '</td></tr>',
     '<tr><td style="padding:4px 10px 4px 0;"><strong>Código de acceso</strong></td><td>' + escapeHtml_(appointment.accessCode) + '</td></tr>',
     '<tr><td style="padding:4px 10px 4px 0;"><strong>OC</strong></td><td>' + escapeHtml_(appointment.ocNumber || 'No registrada') + '</td></tr>',
+    '<tr><td style="padding:4px 10px 4px 0;"><strong>Area</strong></td><td>' + escapeHtml_(appointment.ocArea || 'No registrada') + '</td></tr>',
+    '<tr><td style="padding:4px 10px 4px 0;"><strong>Resumen</strong></td><td>' + escapeHtml_(appointment.ocItemsSummary || 'No disponible') + '</td></tr>',
     '</table>',
     appointment.outsideSchedule === 'SI'
       ? '<p>Esta cita fue coordinada fuera del horario habitual.</p>'
@@ -1611,16 +1628,161 @@ function getPendingPurchaseOrdersForVendor_(vendorCode) {
     return [];
   }
 
-  return getSheetData_(APP_DEFAULTS.sheets.sapOpenOrders)
+  return summarizePurchaseOrders_(
+    getSheetData_(APP_DEFAULTS.sheets.sapOpenOrders)
     .filter(function(row) {
-      var sameVendor = digitsOnly_(row.vendorCode) === vendorDigits;
-      var hasOpenQty = Number(row.openQty || 0) > 0;
-      var status = String(row.status || '').trim().toUpperCase();
-      var isOpenStatus = !status || status === 'ABIERTA' || status === 'OPEN' || status === 'PENDIENTE';
-      return sameVendor && hasOpenQty && isOpenStatus;
+      return digitsOnly_(row.vendorCode) === vendorDigits && isEligibleOpenOrderRow_(row);
     })
-    .sort(sortByDateField_('deliveryDate'))
-    .map(cleanRow_);
+  );
+}
+
+function getPendingPurchaseOrdersByTaxId_(taxId) {
+  var taxDigits = digitsOnly_(taxId);
+  if (!taxDigits) {
+    return [];
+  }
+
+  return summarizePurchaseOrders_(
+    getSheetData_(APP_DEFAULTS.sheets.sapOpenOrders)
+      .filter(function(row) {
+        return digitsOnly_(row.taxId) === taxDigits && isEligibleOpenOrderRow_(row);
+      })
+  );
+}
+
+function getPendingPurchaseOrderForVendor_(vendorCode, poNumber) {
+  var poDigits = digitsOnly_(poNumber);
+  if (!poDigits) {
+    return null;
+  }
+
+  return getPendingPurchaseOrdersForVendor_(vendorCode).find(function(row) {
+    return digitsOnly_(row.poNumber) === poDigits;
+  }) || null;
+}
+
+function getPendingPurchaseOrdersForProvider_(provider) {
+  var orders = getPendingPurchaseOrdersForVendor_(provider.sapVendorCode || '');
+  if (!orders.length && provider.taxId) {
+    orders = getPendingPurchaseOrdersByTaxId_(provider.taxId);
+  }
+  return orders;
+}
+
+function getPendingPurchaseOrderForProvider_(provider, poNumber) {
+  var poDigits = digitsOnly_(poNumber);
+  var orders = getPendingPurchaseOrdersForProvider_(provider);
+  return orders.find(function(row) {
+    return digitsOnly_(row.poNumber) === poDigits;
+  }) || null;
+}
+
+function isEligibleOpenOrderRow_(row) {
+  var hasOpenQty = Number(row.openQty || 0) > 0;
+  var status = String(row.status || '').trim().toUpperCase();
+  var isOpenStatus = !status || status === 'ABIERTA' || status === 'OPEN' || status === 'PENDIENTE';
+  var hasStorageLocation = Boolean(String(row.storageLocation || '').trim());
+  var hasMaterialCode = Boolean(String(row.materialCode || '').trim());
+  return hasOpenQty && isOpenStatus && hasStorageLocation && hasMaterialCode;
+}
+
+function summarizePurchaseOrders_(rows) {
+  var grouped = {};
+  rows.forEach(function(row) {
+    var poNumber = String(row.poNumber || '').trim();
+    if (!poNumber) {
+      return;
+    }
+    grouped[poNumber] = grouped[poNumber] || [];
+    grouped[poNumber].push(row);
+  });
+
+  return Object.keys(grouped).map(function(poNumber) {
+    var items = grouped[poNumber];
+    var first = items[0];
+    var areas = uniqueValues_(items.map(function(item) { return item.storageLocation; }));
+    var materials = uniqueValues_(items.map(function(item) {
+      var description = String(item.materialDescription || '').trim();
+      var code = String(item.materialCode || '').trim();
+      var openQty = String(item.openQty || '').trim();
+      var uom = String(item.uom || '').trim();
+      var base = description || code;
+      if (!base) {
+        return '';
+      }
+      return openQty ? base + ' (' + openQty + (uom ? ' ' + uom : '') + ')' : base;
+    }));
+
+    return cleanRow_({
+      poNumber: poNumber,
+      vendorCode: first.vendorCode,
+      vendorName: first.vendorName,
+      taxId: first.taxId,
+      deliveryDate: first.deliveryDate,
+      area: areas.join(', '),
+      storageLocation: areas.join(', '),
+      lineCount: items.length,
+      itemsSummary: materials.slice(0, 3).join(', '),
+      materialCount: materials.length,
+      openQtyTotal: items.reduce(function(total, item) {
+        return total + Number(item.openQty || 0);
+      }, 0),
+      rows: items.map(cleanRow_)
+    });
+  }).sort(sortByDateField_('deliveryDate'));
+}
+
+function uniqueValues_(values) {
+  var seen = {};
+  return values.filter(function(value) {
+    var text = String(value || '').trim();
+    if (!text || seen[text]) {
+      return false;
+    }
+    seen[text] = true;
+    return true;
+  }).map(function(value) {
+    return String(value || '').trim();
+  });
+}
+
+function getEligibleOpenOrdersForRegistration_(taxId, sapVendorCode) {
+  var vendorDigits = digitsOnly_(sapVendorCode);
+  var taxDigits = digitsOnly_(taxId);
+  return summarizePurchaseOrders_(
+    getSheetData_(APP_DEFAULTS.sheets.sapOpenOrders).filter(function(row) {
+      var sameVendor = vendorDigits && digitsOnly_(row.vendorCode) === vendorDigits;
+      var sameTaxId = taxDigits && digitsOnly_(row.taxId) === taxDigits;
+      return isEligibleOpenOrderRow_(row) && (sameVendor || sameTaxId);
+    })
+  );
+}
+
+function applyPurchaseOrderSnapshot_(appointment, openOrder) {
+  if (!openOrder) {
+    return appointment;
+  }
+  appointment.ocNumber = openOrder.poNumber || appointment.ocNumber || '';
+  appointment.ocArea = openOrder.area || '';
+  appointment.ocItemsSummary = openOrder.itemsSummary || '';
+  appointment.ocDeliveryDate = openOrder.deliveryDate || '';
+  appointment.ocLineCount = String(openOrder.lineCount || '');
+  return appointment;
+}
+
+function enrichAppointmentWithOpenOrderContext_(appointment) {
+  var copy = {};
+  Object.keys(appointment || {}).forEach(function(key) {
+    copy[key] = appointment[key];
+  });
+  if (!copy.ocNumber) {
+    return copy;
+  }
+  if (copy.ocArea && copy.ocItemsSummary) {
+    return copy;
+  }
+  applyPurchaseOrderSnapshot_(copy, getPendingPurchaseOrderForVendor_(copy.sapVendorCode || '', copy.ocNumber));
+  return copy;
 }
 
 function getMode_(e) {
@@ -1866,17 +2028,16 @@ function providerLogin(payload) {
 function registerProvider(payload) {
   ensureSheets_();
   var clean = normalizeProviderPayload_(payload);
-  var sapResult = validateVendorAgainstSap_(clean.sapVendorCode, clean.taxId);
-  if (!sapResult.matched) {
-    throw new Error('Solo pueden registrarse proveedores existentes en SAP.');
+  var eligibleOpenOrders = getEligibleOpenOrdersForRegistration_(clean.taxId, clean.sapVendorCode);
+  if (!eligibleOpenOrders.length) {
+    throw new Error('No tiene OCs abiertas en este momento. Cuando exista una OC pendiente podra registrarse y solicitar su cita.');
   }
-  if (!sapResult.active) {
-    throw new Error('El proveedor existe en SAP pero no esta habilitado para este proceso. Contacta a Grupo Santis.');
-  }
+  var primaryOpenOrder = eligibleOpenOrders[0];
+  var sapResult = validateVendorAgainstSap_(primaryOpenOrder.vendorCode, clean.taxId);
 
   var existing = findProvider_({
     taxId: clean.taxId,
-    vendorCode: sapResult.sapVendorCode || clean.sapVendorCode,
+    sapVendorCode: primaryOpenOrder.vendorCode,
     email: clean.email
   });
 
@@ -1892,13 +2053,14 @@ function registerProvider(payload) {
   var record = existing || {};
   record.providerId = record.providerId || nextId_('PRV');
   record.vendorCode = record.vendorCode || generateProviderCode_();
-  record.vendorName = sapResult.vendorName || clean.vendorName;
+  record.sapVendorCode = primaryOpenOrder.vendorCode || sapResult.sapVendorCode || clean.sapVendorCode;
+  record.vendorName = primaryOpenOrder.vendorName || sapResult.vendorName || clean.vendorName;
   record.taxId = clean.taxId;
   record.contactName = clean.contactName;
   record.email = clean.email;
   record.phone = clean.phone;
-  record.ocNumber = record.ocNumber || '';
-  record.sapStatus = sapResult.status;
+  record.ocNumber = primaryOpenOrder.poNumber || record.ocNumber || '';
+  record.sapStatus = 'OC_ABIERTA';
   record.createdAt = record.createdAt || now;
   record.updatedAt = now;
   record.notes = clean.notes;
@@ -1921,6 +2083,7 @@ function registerProvider(payload) {
     ? 'Tu cuenta fue activada correctamente. Ya puedes solicitar citas.'
     : 'Tu cuenta fue creada. Grupo Santis validara y autorizara tu alta antes de solicitar citas.';
   authResponse.sap = sapResult;
+  authResponse.openOrders = eligibleOpenOrders;
   return authResponse;
 }
 
@@ -2015,6 +2178,14 @@ function requestAppointment(payload) {
   if (provider.registrationStatus !== PROVIDER_STATUS.APPROVED) {
     throw new Error('El proveedor aun no esta aprobado por Grupo Santis.');
   }
+  if (!clean.ocNumber) {
+    throw new Error('Selecciona una OC abierta para continuar.');
+  }
+
+  var selectedOpenOrder = getPendingPurchaseOrderForProvider_(provider, clean.ocNumber);
+  if (!selectedOpenOrder) {
+    throw new Error('La OC seleccionada ya no esta disponible o no cumple las condiciones para agenda.');
+  }
 
   var slotStart = parseLocalDateTime_(clean.startIso);
   validateSlotRequest_(slotStart);
@@ -2025,9 +2196,14 @@ function requestAppointment(payload) {
     appointmentId: nextId_('CIT'),
     providerId: provider.providerId,
     vendorCode: provider.vendorCode,
+    sapVendorCode: provider.sapVendorCode || '',
     vendorName: provider.vendorName,
     email: provider.email,
-    ocNumber: clean.ocNumber || provider.ocNumber || '',
+    ocNumber: selectedOpenOrder.poNumber,
+    ocArea: '',
+    ocItemsSummary: '',
+    ocDeliveryDate: '',
+    ocLineCount: '',
     requestedStart: clean.startIso,
     requestedEnd: formatDateTime_(slotEnd),
     effectiveStart: clean.startIso,
@@ -2043,6 +2219,7 @@ function requestAppointment(payload) {
     mailSentAt: '',
     notes: clean.notes
   };
+  applyPurchaseOrderSnapshot_(appointment, selectedOpenOrder);
 
   saveRecord_(APP_DEFAULTS.sheets.appointments, appointment, 'appointmentId');
   audit_('CITA_SOLICITADA', appointment.appointmentId, provider.email, appointment.slotLabel);
@@ -2056,14 +2233,16 @@ function requestAppointment(payload) {
 
 function buildProviderDashboardResponse_(provider, startDate) {
   var config = getRuntimeConfig_();
+  var pendingPurchaseOrders = getPendingPurchaseOrdersForProvider_(provider);
+  var canRequestAppointments = provider.registrationStatus === PROVIDER_STATUS.APPROVED && pendingPurchaseOrders.length > 0;
   return {
     found: true,
     provider: cleanRow_(provider),
-    warnings: buildProviderWarnings_(provider),
-    pendingPurchaseOrders: getPendingPurchaseOrdersForVendor_(provider.vendorCode),
+    warnings: buildProviderWarnings_(provider, pendingPurchaseOrders),
+    pendingPurchaseOrders: pendingPurchaseOrders,
     appointments: getProviderAppointments_(provider.providerId),
-    canRequestAppointments: provider.registrationStatus === PROVIDER_STATUS.APPROVED,
-    calendar: provider.registrationStatus === PROVIDER_STATUS.APPROVED
+    canRequestAppointments: canRequestAppointments,
+    calendar: canRequestAppointments
       ? buildCalendar_(startDate, config.lookaheadDays, false)
       : null
   };
@@ -2244,7 +2423,7 @@ function validateVendorAgainstSap_(vendorCode, taxId) {
   };
 }
 
-function buildProviderWarnings_(provider) {
+function buildProviderWarnings_(provider, pendingPurchaseOrders) {
   var warnings = [];
   if (provider.sapStatus === 'SIN_PADRON') {
     warnings.push('No hay un padron SAP cargado aun. La validacion se hara manualmente.');
@@ -2258,6 +2437,9 @@ function buildProviderWarnings_(provider) {
   if (provider.registrationStatus === PROVIDER_STATUS.APPROVED) {
     warnings.push('Si necesitas cambiar tu correo, la actualizacion solo puede hacerla Grupo Santis.');
   }
+  if (provider.registrationStatus === PROVIDER_STATUS.APPROVED && !(pendingPurchaseOrders || []).length) {
+    warnings.push('No tiene OCs abiertas habilitadas en este momento. Cuando SAP cargue una OC con area y material, podra solicitar una cita.');
+  }
   return warnings;
 }
 
@@ -2266,6 +2448,9 @@ function findProvider_(criteria) {
   var providers = getSheetData_(APP_DEFAULTS.sheets.providers);
   return providers.find(function(row) {
     if (criteria.providerId && sameText_(row.providerId, criteria.providerId)) {
+      return true;
+    }
+    if (criteria.sapVendorCode && sameText_(row.sapVendorCode, criteria.sapVendorCode)) {
       return true;
     }
     if (criteria.vendorCode && criteria.email) {

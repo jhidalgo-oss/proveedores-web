@@ -494,12 +494,14 @@ label {
 }
 
 input,
+select,
 textarea,
 button {
   font: inherit;
 }
 
 input,
+select,
 textarea {
   width: 100%;
   min-height: 50px;
@@ -523,11 +525,13 @@ textarea::placeholder {
 }
 
 input:hover,
+select:hover,
 textarea:hover {
   border-color: rgba(16, 61, 33, 0.18);
 }
 
 input:focus,
+select:focus,
 textarea:focus {
   outline: none;
   transform: translateY(-1px);
@@ -536,6 +540,7 @@ textarea:focus {
 }
 
 input:disabled,
+select:disabled,
 textarea:disabled,
 .button:disabled,
 .slot:disabled {

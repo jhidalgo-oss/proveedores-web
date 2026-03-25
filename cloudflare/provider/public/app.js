@@ -5,6 +5,7 @@ let boot = null;
 let providerState = null;
 let selectedSlot = null;
 let appointmentsState = [];
+let pendingPurchaseOrdersState = [];
 let sessionToken = "";
 
 document.addEventListener("DOMContentLoaded", async function () {
@@ -28,6 +29,7 @@ function wireEvents() {
   document.getElementById("refreshCalendar").addEventListener("click", refreshDashboard);
   document.getElementById("requestAppointmentButton").addEventListener("click", requestAppointment);
   document.getElementById("logoutButton").addEventListener("click", logout);
+  document.getElementById("appointmentOc").addEventListener("change", renderSelectedPurchaseOrderSummary);
   document.getElementById("forgotPasswordToggle").addEventListener("click", function () {
     togglePanel("passwordRecoveryPanel");
   });
@@ -165,6 +167,7 @@ function renderDashboard(data) {
   activateTab("loginPanel");
   providerState = data.provider;
   appointmentsState = data.appointments || [];
+  pendingPurchaseOrdersState = data.pendingPurchaseOrders || [];
   selectedSlot = null;
   document.getElementById("selectedSlotLabel").textContent = "Ninguna";
   document.getElementById("logoutButton").classList.remove("hidden");
@@ -187,6 +190,7 @@ function renderDashboard(data) {
   });
 
   renderAppointments(appointmentsState);
+  renderPendingPurchaseOrders(pendingPurchaseOrdersState);
 
   const panel = document.getElementById("appointmentPanel");
   if (data.canRequestAppointments && data.calendar) {
@@ -195,6 +199,52 @@ function renderDashboard(data) {
   } else {
     panel.classList.add("hidden");
   }
+}
+
+function renderPendingPurchaseOrders(openOrders) {
+  const select = document.getElementById("appointmentOc");
+  const summary = document.getElementById("appointmentOcSummary");
+  select.innerHTML = '<option value="">Selecciona una OC abierta</option>';
+
+  openOrders.forEach(function (order) {
+    const option = document.createElement("option");
+    option.value = order.poNumber;
+    option.textContent = order.poNumber + " | " + (order.area || "Sin area") + " | " + (order.deliveryDate || "Sin fecha");
+    select.appendChild(option);
+  });
+
+  if (!openOrders.length) {
+    summary.classList.remove("hidden");
+    summary.innerHTML = "<p>No tienes OCs abiertas habilitadas para solicitar cita. La OC debe tener area y material definidos en SAP.</p>";
+    return;
+  }
+
+  summary.classList.add("hidden");
+  summary.innerHTML = "";
+}
+
+function renderSelectedPurchaseOrderSummary() {
+  const summary = document.getElementById("appointmentOcSummary");
+  const selectedPoNumber = document.getElementById("appointmentOc").value;
+  const selected = pendingPurchaseOrdersState.find(function (item) {
+    return item.poNumber === selectedPoNumber;
+  });
+
+  if (!selected) {
+    if (pendingPurchaseOrdersState.length) {
+      summary.classList.add("hidden");
+      summary.innerHTML = "";
+    }
+    return;
+  }
+
+  summary.classList.remove("hidden");
+  summary.innerHTML = [
+    "<p><strong>Area:</strong> " + escapeHtml(selected.area || "No definida") + "</p>",
+    "<p><strong>Fecha entrega:</strong> " + escapeHtml(selected.deliveryDate || "Sin fecha") + "</p>",
+    "<p><strong>Lineas:</strong> " + escapeHtml(String(selected.lineCount || 0)) + "</p>",
+    "<p><strong>Resumen:</strong> " + escapeHtml(selected.itemsSummary || "Sin detalle de materiales") + "</p>"
+  ].join("");
 }
 
 function renderCalendar(calendar) {
@@ -367,6 +417,8 @@ function downloadAppointment(appointmentId) {
     "<tr><td><strong>Hora</strong></td><td>" + escapeHtml(appointment.slotLabel) + "</td></tr>",
     "<tr><td><strong>Estado</strong></td><td>" + escapeHtml(appointment.appointmentStatus) + "</td></tr>",
     "<tr><td><strong>OC</strong></td><td>" + escapeHtml(appointment.ocNumber || "No registrada") + "</td></tr>",
+    "<tr><td><strong>Area</strong></td><td>" + escapeHtml(appointment.ocArea || "No registrada") + "</td></tr>",
+    "<tr><td><strong>Resumen OC</strong></td><td>" + escapeHtml(appointment.ocItemsSummary || "No disponible") + "</td></tr>",
     "<tr><td><strong>C\u00f3digo de acceso</strong></td><td>" + escapeHtml(appointment.accessCode || "Revisa tu correo registrado") + "</td></tr>",
     "</table>",
     "</div>",
@@ -458,6 +510,7 @@ function normalizeUserError(message) {
 function resetProviderView() {
   providerState = null;
   appointmentsState = [];
+  pendingPurchaseOrdersState = [];
   selectedSlot = null;
   document.getElementById("providerSummary").classList.add("hidden");
   document.getElementById("generatedCodeBox").classList.add("hidden");
@@ -466,6 +519,9 @@ function resetProviderView() {
   document.getElementById("warnings").innerHTML = "";
   document.getElementById("emailRecoveryResult").classList.add("hidden");
   document.getElementById("logoutButton").classList.add("hidden");
+  document.getElementById("appointmentOc").innerHTML = '<option value="">Selecciona una OC abierta</option>';
+  document.getElementById("appointmentOcSummary").classList.add("hidden");
+  document.getElementById("appointmentOcSummary").innerHTML = "";
 }
 
 function escapeHtml(value) {
