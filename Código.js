@@ -178,6 +178,138 @@ function setupSystem() {
   };
 }
 
+function runSapSync() {
+  ensureSheets_();
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+
+  try {
+    var result = syncSapDataNow_();
+    if (!result.ok) {
+      throw new Error(result.message || 'La sincronizacion SAP termino con errores.');
+    }
+    audit_('SAP_SYNC_OK', 'SAP', Session.getActiveUser().getEmail() || 'TRIGGER', JSON.stringify({
+      providers: result.providers.status,
+      providersCount: result.providers.written,
+      openOrders: result.openOrders.status,
+      openOrdersCount: result.openOrders.written
+    }));
+    return result;
+  } catch (error) {
+    audit_('SAP_SYNC_ERROR', 'SAP', Session.getActiveUser().getEmail() || 'TRIGGER', String(error && error.message || error));
+    throw error;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function installSapSyncTrigger() {
+  ensureSheets_();
+  var config = getSapSyncConfig_();
+  removeSapSyncTriggers_();
+  var trigger = ScriptApp.newTrigger('runSapSync')
+    .timeBased()
+    .everyHours(config.syncIntervalHours)
+    .create();
+
+  return {
+    ok: true,
+    message: 'Sincronizacion SAP programada cada ' + config.syncIntervalHours + ' horas.',
+    triggerId: trigger.getUniqueId(),
+    intervalHours: config.syncIntervalHours
+  };
+}
+
+function activateSapSyncFromConfig() {
+  ensureSheets_();
+  var applied = applyConfigSheetToScriptProperties();
+  var trigger = installSapSyncTrigger();
+  return {
+    ok: true,
+    message: 'Configuracion SAP aplicada desde la hoja CONFIG y trigger instalado.',
+    propertiesApplied: applied.updatedKeys,
+    trigger: trigger
+  };
+}
+
+function removeSapSyncTrigger() {
+  ensureSheets_();
+  var removed = removeSapSyncTriggers_();
+  return {
+    ok: true,
+    removed: removed
+  };
+}
+
+function getSapSyncStatus() {
+  ensureSheets_();
+  var config = getSapSyncConfig_();
+  var triggers = ScriptApp.getProjectTriggers().filter(function(trigger) {
+    return trigger.getHandlerFunction() === 'runSapSync';
+  });
+  return {
+    ok: true,
+    config: {
+      syncEnabled: config.syncEnabled,
+      syncIntervalHours: config.syncIntervalHours,
+      providerSourceUrl: config.providerSourceUrl,
+      providerSourceFormat: config.providerSourceFormat,
+      providerArrayPath: config.providerArrayPath,
+      openOrdersSourceUrl: config.openOrdersSourceUrl,
+      openOrdersSourceFormat: config.openOrdersSourceFormat,
+      openOrdersArrayPath: config.openOrdersArrayPath,
+      authHeaderName: config.authHeaderName,
+      authTokenConfigured: Boolean(config.authToken),
+      customHeadersConfigured: Boolean(config.customHeadersJson)
+    },
+    installed: triggers.length > 0,
+    triggers: triggers.map(function(trigger) {
+      return {
+        handler: trigger.getHandlerFunction(),
+        eventType: String(trigger.getEventType()),
+        triggerId: trigger.getUniqueId()
+      };
+    })
+  };
+}
+
+function applyConfigSheetToScriptProperties() {
+  ensureSheets_();
+  var rows = getSheetData_(APP_DEFAULTS.sheets.config);
+  var allowedKeys = {
+    SPREADSHEET_ID: true,
+    SUPERVISOR_NAME: true,
+    SLOT_MINUTES: true,
+    MAX_ADVANCE_DAYS: true,
+    LOOKAHEAD_DAYS: true,
+    STRICT_SAP_VALIDATION: true,
+    SAP_SYNC_ENABLED: true,
+    SAP_SYNC_INTERVAL_HOURS: true,
+    SAP_PROVIDER_SOURCE_URL: true,
+    SAP_PROVIDER_SOURCE_FORMAT: true,
+    SAP_PROVIDER_ARRAY_PATH: true,
+    SAP_OPEN_ORDERS_SOURCE_URL: true,
+    SAP_OPEN_ORDERS_SOURCE_FORMAT: true,
+    SAP_OPEN_ORDERS_ARRAY_PATH: true,
+    SAP_SOURCE_AUTH_HEADER: true,
+    SAP_SOURCE_AUTH_TOKEN: true,
+    SAP_SOURCE_HEADERS_JSON: true
+  };
+  var updates = {};
+  rows.forEach(function(row) {
+    var key = String(row.key || '').trim();
+    if (!allowedKeys[key]) {
+      return;
+    }
+    updates[key] = String(row.value || '').trim();
+  });
+  PropertiesService.getScriptProperties().setProperties(updates, false);
+  return {
+    ok: true,
+    updatedKeys: Object.keys(updates)
+  };
+}
+
 function routeApiAction_(action, payload) {
   switch (action) {
     case 'providerBootstrap':
@@ -605,6 +737,23 @@ function getRuntimeConfig_() {
   };
 }
 
+function getSapSyncConfig_() {
+  var props = PropertiesService.getScriptProperties();
+  return {
+    syncEnabled: props.getProperty('SAP_SYNC_ENABLED') !== 'FALSE',
+    syncIntervalHours: Math.max(1, Number(props.getProperty('SAP_SYNC_INTERVAL_HOURS') || 3)),
+    providerSourceUrl: String(props.getProperty('SAP_PROVIDER_SOURCE_URL') || '').trim(),
+    providerSourceFormat: normalizeSapSourceFormat_(props.getProperty('SAP_PROVIDER_SOURCE_FORMAT') || 'JSON'),
+    providerArrayPath: String(props.getProperty('SAP_PROVIDER_ARRAY_PATH') || '').trim(),
+    openOrdersSourceUrl: String(props.getProperty('SAP_OPEN_ORDERS_SOURCE_URL') || '').trim(),
+    openOrdersSourceFormat: normalizeSapSourceFormat_(props.getProperty('SAP_OPEN_ORDERS_SOURCE_FORMAT') || 'JSON'),
+    openOrdersArrayPath: String(props.getProperty('SAP_OPEN_ORDERS_ARRAY_PATH') || '').trim(),
+    authHeaderName: String(props.getProperty('SAP_SOURCE_AUTH_HEADER') || 'Authorization').trim(),
+    authToken: String(props.getProperty('SAP_SOURCE_AUTH_TOKEN') || '').trim(),
+    customHeadersJson: String(props.getProperty('SAP_SOURCE_HEADERS_JSON') || '').trim()
+  };
+}
+
 function ensureSheets_() {
   var spreadsheet = getSpreadsheet_();
   Object.keys(SHEET_HEADERS).forEach(function(sheetName) {
@@ -627,12 +776,42 @@ function ensureSheets_() {
         sheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight('bold');
       }
     }
+    if (sheetName === APP_DEFAULTS.sheets.config) {
+      ensureConfigSheetRows_(sheet);
+    }
   });
 }
 
 function seedConfigSheet_(sheet) {
+  var rows = getDefaultConfigRows_();
+  sheet.getRange(2, 1, rows.length, rows[0].length).setValues(rows);
+}
+
+function ensureConfigSheetRows_(sheet) {
+  var defaults = getDefaultConfigRows_();
+  var existing = {};
+  if (sheet.getLastRow() >= 2) {
+    sheet.getRange(2, 1, sheet.getLastRow() - 1, 3).getValues().forEach(function(row) {
+      if (row[0]) {
+        existing[String(row[0])] = row;
+      }
+    });
+  }
+  var rows = defaults.map(function(defaultRow) {
+    var current = existing[defaultRow[0]];
+    return [
+      defaultRow[0],
+      current && String(current[1] || '').trim() ? current[1] : defaultRow[1],
+      defaultRow[2]
+    ];
+  });
+  sheet.getRange(2, 1, rows.length, 3).setValues(rows);
+}
+
+function getDefaultConfigRows_() {
   var config = getRuntimeConfig_();
-  var rows = [
+  var sapSync = getSapSyncConfig_();
+  return [
     ['SPREADSHEET_ID', config.spreadsheetId, 'ID de la hoja principal'],
     ['SUPERVISOR_NAME', config.supervisorName, 'Nombre visible del supervisor'],
     ['SLOT_MINUTES', String(config.slotMinutes), 'Duracion de la cita en minutos'],
@@ -640,9 +819,19 @@ function seedConfigSheet_(sheet) {
     ['LOOKAHEAD_DAYS', String(config.lookaheadDays), 'Cuantos dias muestra el calendario'],
     ['STRICT_SAP_VALIDATION', config.strictSapValidation ? 'TRUE' : 'FALSE', 'Bloquea proveedores no encontrados en SAP'],
     ['SAP_REQUIRED_FIELDS', 'vendorCode,taxId,vendorName,active,lastSync', 'Campos minimos esperados del padron SAP'],
-    ['SAP_OPEN_ORDERS_FIELDS', 'poNumber,vendorCode,openQty,status,lastSync', 'Campos minimos esperados para OCs pendientes']
+    ['SAP_OPEN_ORDERS_FIELDS', 'poNumber,vendorCode,openQty,status,lastSync', 'Campos minimos esperados para OCs pendientes'],
+    ['SAP_SYNC_ENABLED', sapSync.syncEnabled ? 'TRUE' : 'FALSE', 'Habilita la sincronizacion automatica desde una fuente SAP o middleware'],
+    ['SAP_SYNC_INTERVAL_HOURS', String(sapSync.syncIntervalHours), 'Frecuencia del trigger automatico en horas'],
+    ['SAP_PROVIDER_SOURCE_URL', sapSync.providerSourceUrl, 'Endpoint HTTPS para proveedores SAP en JSON o CSV'],
+    ['SAP_PROVIDER_SOURCE_FORMAT', sapSync.providerSourceFormat, 'Formato de la fuente de proveedores: JSON o CSV'],
+    ['SAP_PROVIDER_ARRAY_PATH', sapSync.providerArrayPath, 'Ruta opcional al arreglo de proveedores, por ejemplo d.results o value'],
+    ['SAP_OPEN_ORDERS_SOURCE_URL', sapSync.openOrdersSourceUrl, 'Endpoint HTTPS para OCs pendientes en JSON o CSV'],
+    ['SAP_OPEN_ORDERS_SOURCE_FORMAT', sapSync.openOrdersSourceFormat, 'Formato de la fuente de OCs pendientes: JSON o CSV'],
+    ['SAP_OPEN_ORDERS_ARRAY_PATH', sapSync.openOrdersArrayPath, 'Ruta opcional al arreglo de OCs, por ejemplo d.results o value'],
+    ['SAP_SOURCE_AUTH_HEADER', sapSync.authHeaderName, 'Nombre del header de autenticacion para consumir la fuente'],
+    ['SAP_SOURCE_AUTH_TOKEN', sapSync.authToken ? 'CONFIGURADO' : '', 'Token o credencial del endpoint. Guardarlo tambien en Script Properties'],
+    ['SAP_SOURCE_HEADERS_JSON', sapSync.customHeadersJson, 'Headers extra en JSON, por ejemplo {\"x-api-key\":\"abc\"}']
   ];
-  sheet.getRange(2, 1, rows.length, rows[0].length).setValues(rows);
 }
 
 function getSpreadsheet_() {
@@ -1000,6 +1189,367 @@ function sendProviderApprovalEmail_(provider) {
     subject: subject,
     htmlBody: body
   });
+}
+
+function syncSapDataNow_() {
+  var config = getSapSyncConfig_();
+  if (!config.syncEnabled) {
+    return {
+      ok: true,
+      skipped: true,
+      message: 'La sincronizacion SAP esta desactivada en Script Properties.',
+      providers: { status: 'SKIPPED', written: 0 },
+      openOrders: { status: 'SKIPPED', written: 0 },
+      executedAt: nowIso_()
+    };
+  }
+
+  var providersResult = executeSapSyncStep_(
+    Boolean(config.providerSourceUrl),
+    syncSapProviders_,
+    'SAP_PROVIDER_SOURCE_URL no configurado.'
+  );
+  var openOrdersResult = executeSapSyncStep_(
+    Boolean(config.openOrdersSourceUrl),
+    syncSapOpenOrders_,
+    'SAP_OPEN_ORDERS_SOURCE_URL no configurado.'
+  );
+  var errors = [];
+  if (providersResult.status === 'ERROR') {
+    errors.push('Proveedores: ' + providersResult.error);
+  }
+  if (openOrdersResult.status === 'ERROR') {
+    errors.push('OCs pendientes: ' + openOrdersResult.error);
+  }
+
+  return {
+    ok: errors.length === 0,
+    skipped: providersResult.status === 'SKIPPED' && openOrdersResult.status === 'SKIPPED',
+    message: errors.length ? errors.join(' | ') : 'Sincronizacion SAP completada.',
+    providers: providersResult,
+    openOrders: openOrdersResult,
+    executedAt: nowIso_()
+  };
+}
+
+function executeSapSyncStep_(shouldRun, handler, skippedReason) {
+  if (!shouldRun) {
+    return {
+      status: 'SKIPPED',
+      written: 0,
+      reason: skippedReason
+    };
+  }
+  try {
+    return handler();
+  } catch (error) {
+    return {
+      status: 'ERROR',
+      written: 0,
+      error: String(error && error.message || error)
+    };
+  }
+}
+
+function syncSapProviders_() {
+  var config = getSapSyncConfig_();
+  var sourceRows = fetchSapSourceRows_(
+    config.providerSourceUrl,
+    config.providerSourceFormat,
+    config.providerArrayPath,
+    'proveedores SAP'
+  );
+  var rows = sourceRows.map(function(row) {
+    return mapSapProviderRecord_(row);
+  }).filter(function(row) {
+    return row.vendorCode || row.taxId || row.vendorName;
+  });
+
+  if (!rows.length) {
+    throw new Error('La fuente de proveedores SAP devolvio 0 registros validos. Se cancelo la actualizacion para evitar vaciar el padron.');
+  }
+
+  replaceSheetContents_(APP_DEFAULTS.sheets.sap, rows);
+  return {
+    status: 'UPDATED',
+    written: rows.length,
+    source: config.providerSourceUrl
+  };
+}
+
+function syncSapOpenOrders_() {
+  var config = getSapSyncConfig_();
+  var sourceRows = fetchSapSourceRows_(
+    config.openOrdersSourceUrl,
+    config.openOrdersSourceFormat,
+    config.openOrdersArrayPath,
+    'OCs pendientes SAP'
+  );
+  var rows = sourceRows.map(function(row) {
+    return mapSapOpenOrderRecord_(row);
+  }).filter(function(row) {
+    return row.poNumber && row.vendorCode;
+  }).filter(function(row) {
+    return Number(row.openQty || 0) > 0;
+  });
+
+  replaceSheetContents_(APP_DEFAULTS.sheets.sapOpenOrders, rows);
+  return {
+    status: 'UPDATED',
+    written: rows.length,
+    source: config.openOrdersSourceUrl
+  };
+}
+
+function fetchSapSourceRows_(url, format, arrayPath, sourceLabel) {
+  var response = UrlFetchApp.fetch(url, {
+    method: 'get',
+    muteHttpExceptions: true,
+    headers: buildSapFetchHeaders_()
+  });
+  var statusCode = response.getResponseCode();
+  if (statusCode < 200 || statusCode >= 300) {
+    throw new Error('No pudimos consultar ' + sourceLabel + '. Codigo HTTP: ' + statusCode + '.');
+  }
+
+  var text = response.getContentText();
+  if (format === 'CSV') {
+    return parseCsvRows_(text);
+  }
+
+  var payload;
+  try {
+    payload = JSON.parse(text);
+  } catch (error) {
+    throw new Error('La fuente ' + sourceLabel + ' no devolvio JSON valido.');
+  }
+
+  return extractSapCollection_(payload, arrayPath, sourceLabel);
+}
+
+function buildSapFetchHeaders_() {
+  var config = getSapSyncConfig_();
+  var headers = {
+    Accept: 'application/json'
+  };
+
+  if (config.authToken) {
+    headers[config.authHeaderName || 'Authorization'] = config.authToken;
+  }
+
+  if (config.customHeadersJson) {
+    try {
+      var extra = JSON.parse(config.customHeadersJson);
+      Object.keys(extra).forEach(function(key) {
+        headers[key] = extra[key];
+      });
+    } catch (error) {
+      throw new Error('SAP_SOURCE_HEADERS_JSON no es un JSON valido.');
+    }
+  }
+
+  return headers;
+}
+
+function extractSapCollection_(payload, arrayPath, sourceLabel) {
+  var collection = arrayPath ? getValueByPath_(payload, arrayPath) : inferSapCollection_(payload);
+  if (!Array.isArray(collection)) {
+    throw new Error('La fuente ' + sourceLabel + ' no contiene una lista valida de registros.');
+  }
+  return collection;
+}
+
+function inferSapCollection_(payload) {
+  if (Array.isArray(payload)) {
+    return payload;
+  }
+  if (payload && Array.isArray(payload.value)) {
+    return payload.value;
+  }
+  if (payload && payload.d && Array.isArray(payload.d.results)) {
+    return payload.d.results;
+  }
+  if (payload && Array.isArray(payload.results)) {
+    return payload.results;
+  }
+  if (payload && Array.isArray(payload.items)) {
+    return payload.items;
+  }
+  if (payload && Array.isArray(payload.data)) {
+    return payload.data;
+  }
+  return null;
+}
+
+function getValueByPath_(payload, path) {
+  return String(path || '').split('.').filter(function(token) {
+    return token;
+  }).reduce(function(current, token) {
+    if (current === null || current === undefined) {
+      return null;
+    }
+    return current[token];
+  }, payload);
+}
+
+function parseCsvRows_(text) {
+  var rows = Utilities.parseCsv(String(text || ''));
+  if (!rows.length) {
+    return [];
+  }
+  var headers = rows[0];
+  return rows.slice(1).filter(function(row) {
+    return row.some(function(cell) { return String(cell || '').trim() !== ''; });
+  }).map(function(row) {
+    var item = {};
+    headers.forEach(function(header, index) {
+      item[header] = row[index];
+    });
+    return item;
+  });
+}
+
+function mapSapProviderRecord_(row) {
+  var now = nowIso_();
+  return {
+    vendorCode: normalizeSapText_(pickField_(row, ['vendorCode', 'supplierCode', 'vendor', 'code', 'lifnr', 'VendorCode', 'LIFNR'])),
+    vendorName: normalizeSapText_(pickField_(row, ['vendorName', 'supplierName', 'name', 'name1', 'companyName', 'VendorName', 'NAME1'])),
+    taxId: digitsOnly_(pickField_(row, ['taxId', 'ruc', 'taxNumber', 'vatNumber', 'stcd1', 'RUC', 'STCD1'])),
+    email: normalizeSapText_(pickField_(row, ['email', 'smtp_addr', 'smtpAddr', 'mail', 'Email', 'SMTP_ADDR'])),
+    phone: normalizeSapText_(pickField_(row, ['phone', 'telephone', 'tel_number', 'tel1_numbr', 'Phone', 'TEL_NUMBER'])),
+    companyCode: normalizeSapText_(pickField_(row, ['companyCode', 'bukrs', 'CompanyCode', 'BUKRS'])),
+    purchasingOrg: normalizeSapText_(pickField_(row, ['purchasingOrg', 'ekorg', 'PurchasingOrg', 'EKORG'])),
+    blockedForPurchasing: normalizeSapBoolean_(pickField_(row, ['blockedForPurchasing', 'purchasingBlock', 'sperm', 'SPERM'])),
+    active: normalizeSapActiveValue_(pickField_(row, ['active', 'status', 'isActive', 'Active', 'STATUS'])),
+    lastSync: normalizeSapText_(pickField_(row, ['lastSync', 'lastUpdated', 'syncAt', 'LastSync'])) || now,
+    notes: normalizeSapText_(pickField_(row, ['notes', 'observation', 'comment', 'Notes']))
+  };
+}
+
+function mapSapOpenOrderRecord_(row) {
+  var orderedQty = normalizeSapNumber_(pickField_(row, ['orderedQty', 'quantity', 'menge', 'OrderedQty', 'MENGE']));
+  var receivedQty = normalizeSapNumber_(pickField_(row, ['receivedQty', 'goodsReceivedQty', 'wemng', 'ReceivedQty', 'WEMNG']));
+  var explicitOpenQty = normalizeSapNumber_(pickField_(row, ['openQty', 'outstandingQty', 'pendingQty', 'OpenQty']));
+  var computedOpenQty = explicitOpenQty || Math.max(orderedQty - receivedQty, 0);
+
+  return {
+    poNumber: normalizeSapText_(pickField_(row, ['poNumber', 'purchaseOrder', 'ebeln', 'PoNumber', 'EBELN'])),
+    poItem: normalizeSapText_(pickField_(row, ['poItem', 'item', 'ebelp', 'PoItem', 'EBELP'])),
+    vendorCode: normalizeSapText_(pickField_(row, ['vendorCode', 'supplierCode', 'lifnr', 'VendorCode', 'LIFNR'])),
+    vendorName: normalizeSapText_(pickField_(row, ['vendorName', 'supplierName', 'name1', 'VendorName', 'NAME1'])),
+    taxId: digitsOnly_(pickField_(row, ['taxId', 'ruc', 'stcd1', 'TaxId', 'STCD1'])),
+    documentDate: normalizeSapDate_(pickField_(row, ['documentDate', 'docDate', 'bedat', 'DocumentDate', 'BEDAT'])),
+    deliveryDate: normalizeSapDate_(pickField_(row, ['deliveryDate', 'delivery', 'eindt', 'DeliveryDate', 'EINDT'])),
+    materialCode: normalizeSapText_(pickField_(row, ['materialCode', 'material', 'matnr', 'MaterialCode', 'MATNR'])),
+    materialDescription: normalizeSapText_(pickField_(row, ['materialDescription', 'description', 'txz01', 'maktx', 'MaterialDescription', 'TXZ01'])),
+    plant: normalizeSapText_(pickField_(row, ['plant', 'werks', 'Plant', 'WERKS'])),
+    storageLocation: normalizeSapText_(pickField_(row, ['storageLocation', 'lgort', 'StorageLocation', 'LGORT'])),
+    orderedQty: String(orderedQty),
+    receivedQty: String(receivedQty),
+    openQty: String(computedOpenQty),
+    uom: normalizeSapText_(pickField_(row, ['uom', 'unit', 'meins', 'UOM', 'MEINS'])),
+    status: normalizeSapText_(pickField_(row, ['status', 'Status'])) || 'ABIERTA',
+    buyer: normalizeSapText_(pickField_(row, ['buyer', 'buyerGroup', 'ekgrp', 'Buyer', 'EKGRP'])),
+    companyCode: normalizeSapText_(pickField_(row, ['companyCode', 'bukrs', 'CompanyCode', 'BUKRS'])),
+    purchasingOrg: normalizeSapText_(pickField_(row, ['purchasingOrg', 'ekorg', 'PurchasingOrg', 'EKORG'])),
+    lastSync: normalizeSapText_(pickField_(row, ['lastSync', 'lastUpdated', 'syncAt', 'LastSync'])) || nowIso_(),
+    notes: normalizeSapText_(pickField_(row, ['notes', 'observation', 'comment', 'Notes']))
+  };
+}
+
+function pickField_(row, aliases) {
+  var normalized = {};
+  Object.keys(row || {}).forEach(function(key) {
+    normalized[String(key).replace(/[^A-Za-z0-9]/g, '').toLowerCase()] = row[key];
+  });
+  for (var index = 0; index < aliases.length; index += 1) {
+    var aliasKey = String(aliases[index]).replace(/[^A-Za-z0-9]/g, '').toLowerCase();
+    if (Object.prototype.hasOwnProperty.call(normalized, aliasKey)) {
+      return normalized[aliasKey];
+    }
+  }
+  return '';
+}
+
+function normalizeSapSourceFormat_(value) {
+  var format = String(value || 'JSON').trim().toUpperCase();
+  return format === 'CSV' ? 'CSV' : 'JSON';
+}
+
+function normalizeSapText_(value) {
+  return String(value || '').trim();
+}
+
+function normalizeSapBoolean_(value) {
+  var text = String(value || '').trim().toUpperCase();
+  if (!text) {
+    return 'FALSE';
+  }
+  return ['TRUE', 'SI', 'YES', 'X', '1', 'BLOQUEADO', 'BLOCKED'].indexOf(text) >= 0 ? 'TRUE' : 'FALSE';
+}
+
+function normalizeSapActiveValue_(value) {
+  var text = String(value || '').trim().toUpperCase();
+  if (!text) {
+    return 'TRUE';
+  }
+  if (['FALSE', 'NO', '0', 'INACTIVO', 'INACTIVE', 'BLOCKED', 'BLOQUEADO'].indexOf(text) >= 0) {
+    return 'FALSE';
+  }
+  return 'TRUE';
+}
+
+function normalizeSapDate_(value) {
+  var text = String(value || '').trim();
+  if (!text) {
+    return '';
+  }
+  if (/^\d{4}-\d{2}-\d{2}/.test(text)) {
+    return text.slice(0, 10);
+  }
+  if (/^\d{8}$/.test(text)) {
+    return text.slice(0, 4) + '-' + text.slice(4, 6) + '-' + text.slice(6, 8);
+  }
+  return text;
+}
+
+function normalizeSapNumber_(value) {
+  var text = String(value || '').trim();
+  if (!text) {
+    return 0;
+  }
+  var normalized = text.replace(/\s/g, '').replace(/\.(?=\d{3}(?:\D|$))/g, '').replace(',', '.');
+  var parsed = Number(normalized);
+  return isNaN(parsed) ? 0 : parsed;
+}
+
+function replaceSheetContents_(sheetName, records) {
+  var sheet = getSheet_(sheetName);
+  var headers = SHEET_HEADERS[sheetName];
+  var previousLastRow = sheet.getLastRow();
+  if (previousLastRow > 1) {
+    sheet.getRange(2, 1, previousLastRow - 1, headers.length).clearContent();
+  }
+  if (!records.length) {
+    return;
+  }
+  var values = records.map(function(record) {
+    return headers.map(function(header) {
+      return record[header] || '';
+    });
+  });
+  sheet.getRange(2, 1, values.length, headers.length).setValues(values);
+}
+
+function removeSapSyncTriggers_() {
+  var removed = 0;
+  ScriptApp.getProjectTriggers().forEach(function(trigger) {
+    if (trigger.getHandlerFunction() === 'runSapSync') {
+      ScriptApp.deleteTrigger(trigger);
+      removed += 1;
+    }
+  });
+  return removed;
 }
 
 function sendAppointmentEmail_(appointment, isReschedule) {
