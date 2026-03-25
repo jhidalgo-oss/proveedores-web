@@ -30,6 +30,7 @@ function wireEvents() {
   document.getElementById("requestAppointmentButton").addEventListener("click", requestAppointment);
   document.getElementById("logoutButton").addEventListener("click", logout);
   document.getElementById("appointmentOc").addEventListener("change", renderSelectedPurchaseOrderSummary);
+  document.getElementById("appointmentOcSearch").addEventListener("input", renderPendingPurchaseOrders);
   document.getElementById("forgotPasswordToggle").addEventListener("click", function () {
     togglePanel("passwordRecoveryPanel");
   });
@@ -190,7 +191,7 @@ function renderDashboard(data) {
   });
 
   renderAppointments(appointmentsState);
-  renderPendingPurchaseOrders(pendingPurchaseOrdersState);
+  renderPendingPurchaseOrders();
 
   const panel = document.getElementById("appointmentPanel");
   if (data.canRequestAppointments && data.calendar) {
@@ -201,17 +202,38 @@ function renderDashboard(data) {
   }
 }
 
-function renderPendingPurchaseOrders(openOrders) {
+function renderPendingPurchaseOrders() {
+  const openOrders = pendingPurchaseOrdersState || [];
   const select = document.getElementById("appointmentOc");
   const summary = document.getElementById("appointmentOcSummary");
+  const searchValue = String(document.getElementById("appointmentOcSearch").value || "").trim().toLowerCase();
+  const currentValue = select.value;
   select.innerHTML = '<option value="">Selecciona una OC abierta</option>';
 
-  openOrders.forEach(function (order) {
+  const filteredOrders = openOrders.filter(function (order) {
+    if (!searchValue) {
+      return true;
+    }
+    const haystack = [
+      order.poNumber,
+      order.area,
+      order.areaCodes,
+      order.itemsSummary,
+      order.deliveryDate
+    ].join(" ").toLowerCase();
+    return haystack.indexOf(searchValue) >= 0;
+  });
+
+  filteredOrders.forEach(function (order) {
     const option = document.createElement("option");
     option.value = order.poNumber;
-    option.textContent = order.poNumber + " | " + (order.area || "Sin area") + " | " + (order.deliveryDate || "Sin fecha");
+    option.textContent = order.poNumber + " | " + (order.area || "Sin area") + " | " + (order.itemsSummary || "Sin detalle");
     select.appendChild(option);
   });
+
+  if (filteredOrders.some(function (order) { return order.poNumber === currentValue; })) {
+    select.value = currentValue;
+  }
 
   if (!openOrders.length) {
     summary.classList.remove("hidden");
@@ -219,8 +241,13 @@ function renderPendingPurchaseOrders(openOrders) {
     return;
   }
 
-  summary.classList.add("hidden");
-  summary.innerHTML = "";
+  if (openOrders.length && !filteredOrders.length) {
+    summary.classList.remove("hidden");
+    summary.innerHTML = "<p>No encontramos OCs que coincidan con tu b\u00fasqueda.</p>";
+    return;
+  }
+
+  renderSelectedPurchaseOrderSummary();
 }
 
 function renderSelectedPurchaseOrderSummary() {
@@ -241,6 +268,7 @@ function renderSelectedPurchaseOrderSummary() {
   summary.classList.remove("hidden");
   summary.innerHTML = [
     "<p><strong>Area:</strong> " + escapeHtml(selected.area || "No definida") + "</p>",
+    "<p><strong>Ubicaci\u00f3n SAP:</strong> " + escapeHtml(selected.areaCodes || selected.storageLocation || "No definida") + "</p>",
     "<p><strong>Fecha entrega:</strong> " + escapeHtml(selected.deliveryDate || "Sin fecha") + "</p>",
     "<p><strong>Lineas:</strong> " + escapeHtml(String(selected.lineCount || 0)) + "</p>",
     "<p><strong>Resumen:</strong> " + escapeHtml(selected.itemsSummary || "Sin detalle de materiales") + "</p>"
@@ -520,6 +548,7 @@ function resetProviderView() {
   document.getElementById("emailRecoveryResult").classList.add("hidden");
   document.getElementById("logoutButton").classList.add("hidden");
   document.getElementById("appointmentOc").innerHTML = '<option value="">Selecciona una OC abierta</option>';
+  document.getElementById("appointmentOcSearch").value = "";
   document.getElementById("appointmentOcSummary").classList.add("hidden");
   document.getElementById("appointmentOcSummary").innerHTML = "";
 }

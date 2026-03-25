@@ -299,7 +299,8 @@ function applyConfigSheetToScriptProperties() {
     SAP_OPEN_ORDERS_ARRAY_PATH: true,
     SAP_SOURCE_AUTH_HEADER: true,
     SAP_SOURCE_AUTH_TOKEN: true,
-    SAP_SOURCE_HEADERS_JSON: true
+    SAP_SOURCE_HEADERS_JSON: true,
+    STORAGE_LOCATION_AREA_MAP_JSON: true
   };
   var updates = {};
   rows.forEach(function(row) {
@@ -751,6 +752,18 @@ function getRuntimeConfig_() {
   };
 }
 
+function getStorageLocationAreaMap_() {
+  var raw = String(PropertiesService.getScriptProperties().getProperty('STORAGE_LOCATION_AREA_MAP_JSON') || '').trim();
+  if (!raw) {
+    return {};
+  }
+  try {
+    return JSON.parse(raw);
+  } catch (error) {
+    return {};
+  }
+}
+
 function getSapSyncConfig_() {
   var props = PropertiesService.getScriptProperties();
   return {
@@ -844,7 +857,8 @@ function getDefaultConfigRows_() {
     ['SAP_OPEN_ORDERS_ARRAY_PATH', sapSync.openOrdersArrayPath, 'Ruta opcional al arreglo de OCs, por ejemplo d.results o value'],
     ['SAP_SOURCE_AUTH_HEADER', sapSync.authHeaderName, 'Nombre del header de autenticacion para consumir la fuente'],
     ['SAP_SOURCE_AUTH_TOKEN', sapSync.authToken ? 'CONFIGURADO' : '', 'Token o credencial del endpoint. Guardarlo tambien en Script Properties'],
-    ['SAP_SOURCE_HEADERS_JSON', sapSync.customHeadersJson, 'Headers extra en JSON, por ejemplo {\"x-api-key\":\"abc\"}']
+    ['SAP_SOURCE_HEADERS_JSON', sapSync.customHeadersJson, 'Headers extra en JSON, por ejemplo {\"x-api-key\":\"abc\"}'],
+    ['STORAGE_LOCATION_AREA_MAP_JSON', '', 'Mapa JSON de area interna por storageLocation. Ejemplo: {\"AL01\":\"Almacen seco\",\"FR01\":\"Camara de frio\"}']
   ];
 }
 
@@ -1687,6 +1701,7 @@ function isEligibleOpenOrderRow_(row) {
 }
 
 function summarizePurchaseOrders_(rows) {
+  var areaMap = getStorageLocationAreaMap_();
   var grouped = {};
   rows.forEach(function(row) {
     var poNumber = String(row.poNumber || '').trim();
@@ -1700,7 +1715,10 @@ function summarizePurchaseOrders_(rows) {
   return Object.keys(grouped).map(function(poNumber) {
     var items = grouped[poNumber];
     var first = items[0];
-    var areas = uniqueValues_(items.map(function(item) { return item.storageLocation; }));
+    var storageLocations = uniqueValues_(items.map(function(item) { return item.storageLocation; }));
+    var areas = uniqueValues_(storageLocations.map(function(code) {
+      return resolveStorageLocationArea_(code, areaMap);
+    }));
     var materials = uniqueValues_(items.map(function(item) {
       var description = String(item.materialDescription || '').trim();
       var code = String(item.materialCode || '').trim();
@@ -1720,7 +1738,8 @@ function summarizePurchaseOrders_(rows) {
       taxId: first.taxId,
       deliveryDate: first.deliveryDate,
       area: areas.join(', '),
-      storageLocation: areas.join(', '),
+      areaCodes: storageLocations.join(', '),
+      storageLocation: storageLocations.join(', '),
       lineCount: items.length,
       itemsSummary: materials.slice(0, 3).join(', '),
       materialCount: materials.length,
@@ -1730,6 +1749,14 @@ function summarizePurchaseOrders_(rows) {
       rows: items.map(cleanRow_)
     });
   }).sort(sortByDateField_('deliveryDate'));
+}
+
+function resolveStorageLocationArea_(code, areaMap) {
+  var cleanCode = String(code || '').trim();
+  if (!cleanCode) {
+    return '';
+  }
+  return areaMap[cleanCode] ? cleanCode + ' - ' + areaMap[cleanCode] : cleanCode;
 }
 
 function uniqueValues_(values) {
