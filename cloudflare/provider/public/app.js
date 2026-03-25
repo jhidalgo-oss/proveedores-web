@@ -3,6 +3,7 @@ const API_BASE = "/api";
 let boot = null;
 let providerState = null;
 let selectedSlot = null;
+let appointmentsState = [];
 
 document.addEventListener("DOMContentLoaded", async function () {
   wireEvents();
@@ -20,19 +21,29 @@ async function loadBootstrap() {
   try {
     boot = await api("providerBootstrap", {});
   } catch (error) {
-    showMessage(error.message || "No se pudo inicializar la pagina.", "error");
+    showMessage(error.message || "No se pudo inicializar la página.", "error");
   }
 }
 
 async function submitRegistration(event) {
   event.preventDefault();
   const payload = formToObject(event.target);
+
   try {
     const response = await api("registerProvider", payload);
     showMessage(response.message, "success");
-    document.getElementById("lookupForm").vendorCode.value = payload.vendorCode;
-    document.getElementById("lookupForm").email.value = payload.email;
-    await lookupProvider(payload.vendorCode, payload.email);
+
+    const generatedCodeBox = document.getElementById("generatedCodeBox");
+    generatedCodeBox.classList.remove("hidden");
+    generatedCodeBox.innerHTML = `
+      <p class="eyebrow">Código generado</p>
+      <p><strong>${escapeHtml(response.provider.vendorCode)}</strong></p>
+      <p>Guarda este código. Lo usarás junto con tu correo para iniciar sesión.</p>
+    `;
+
+    document.getElementById("lookupForm").vendorCode.value = response.provider.vendorCode;
+    document.getElementById("lookupForm").email.value = response.provider.email;
+    await lookupProvider(response.provider.vendorCode, response.provider.email);
   } catch (error) {
     showMessage(error.message, "error");
   }
@@ -55,11 +66,7 @@ async function lookupProvider(vendorCode, email) {
     });
     renderDashboard(data);
   } catch (error) {
-    providerState = null;
-    document.getElementById("providerSummary").classList.add("hidden");
-    document.getElementById("appointmentPanel").classList.add("hidden");
-    document.getElementById("appointmentsHistory").classList.add("hidden");
-    document.getElementById("warnings").innerHTML = "";
+    resetProviderView();
     showMessage(error.message, "error");
   }
 }
@@ -73,22 +80,20 @@ async function refreshDashboard() {
 
 function renderDashboard(data) {
   if (!data.found) {
-    providerState = null;
-    document.getElementById("providerSummary").classList.add("hidden");
-    document.getElementById("appointmentPanel").classList.add("hidden");
-    document.getElementById("appointmentsHistory").classList.add("hidden");
-    document.getElementById("warnings").innerHTML = "";
+    resetProviderView();
     showMessage(data.message || "Proveedor no encontrado.", "error");
     return;
   }
 
   providerState = data.provider;
+  appointmentsState = data.appointments || [];
+
   const summary = document.getElementById("providerSummary");
   summary.classList.remove("hidden");
   summary.innerHTML = `
     <div class="status status-${data.provider.registrationStatus.toLowerCase()}">${escapeHtml(data.provider.registrationStatus)}</div>
     <p><strong>${escapeHtml(data.provider.vendorName)}</strong></p>
-    <p>Codigo: ${escapeHtml(data.provider.vendorCode)} | Correo: ${escapeHtml(data.provider.email)}</p>
+    <p>Código de proveedor: ${escapeHtml(data.provider.vendorCode)} | Correo: ${escapeHtml(data.provider.email)}</p>
   `;
 
   const warnings = document.getElementById("warnings");
@@ -100,7 +105,7 @@ function renderDashboard(data) {
     warnings.appendChild(node);
   });
 
-  renderAppointments(data.appointments || []);
+  renderAppointments(appointmentsState);
 
   const panel = document.getElementById("appointmentPanel");
   if (data.canRequestAppointments && data.calendar) {
@@ -131,7 +136,7 @@ function renderCalendar(calendar) {
     if (!day.slots.length) {
       const empty = document.createElement("p");
       empty.className = "muted";
-      empty.textContent = "Sin atencion ese dia";
+      empty.textContent = "Sin atención ese día";
       slots.appendChild(empty);
     } else {
       day.slots.forEach(function (slot) {
@@ -163,17 +168,22 @@ function renderAppointments(appointments) {
   section.classList.remove("hidden");
 
   if (!appointments.length) {
-    wrapper.innerHTML = '<p class="muted">Aun no tienes citas registradas.</p>';
+    wrapper.innerHTML = '<p class="muted">Aún no tienes citas registradas.</p>';
     return;
   }
 
   const rows = appointments.map(function (item) {
+    const downloadButton = item.appointmentStatus === "APROBADA"
+      ? `<button class="button subtle table-action" type="button" onclick="downloadAppointment('${escapeHtml(item.appointmentId)}')">Descargar</button>`
+      : "";
+
     return `
       <tr>
         <td>${escapeHtml(item.slotDate)}</td>
         <td>${escapeHtml(item.slotLabel)}</td>
         <td>${escapeHtml(item.appointmentStatus)}</td>
         <td>${escapeHtml(item.ocNumber || "")}</td>
+        <td>${downloadButton}</td>
       </tr>
     `;
   }).join("");
@@ -181,7 +191,7 @@ function renderAppointments(appointments) {
   wrapper.innerHTML = `
     <table>
       <thead>
-        <tr><th>Fecha</th><th>Hora</th><th>Estado</th><th>OC</th></tr>
+        <tr><th>Fecha</th><th>Hora</th><th>Estado</th><th>OC</th><th>Acción</th></tr>
       </thead>
       <tbody>${rows}</tbody>
     </table>
@@ -190,7 +200,7 @@ function renderAppointments(appointments) {
 
 async function requestAppointment() {
   if (!providerState) {
-    showMessage("Primero consulta tu proveedor.", "error");
+    showMessage("Primero inicia sesión con tu código y correo.", "error");
     return;
   }
   if (!selectedSlot) {
@@ -214,6 +224,59 @@ async function requestAppointment() {
   }
 }
 
+function downloadAppointment(appointmentId) {
+  const appointment = appointmentsState.find(function (item) {
+    return item.appointmentId === appointmentId;
+  });
+
+  if (!appointment) {
+    showMessage("No se encontró la cita para descargar.", "error");
+    return;
+  }
+
+  const content = `
+    <!DOCTYPE html>
+    <html lang="es">
+      <head>
+        <meta charset="UTF-8">
+        <title>Cita de proveedor</title>
+        <style>
+          body { font-family: Georgia, serif; padding: 32px; color: #1f1a14; }
+          .ticket { max-width: 720px; margin: 0 auto; border: 1px solid #d8ccb6; border-radius: 20px; padding: 28px; }
+          h1 { margin-top: 0; }
+          table { width: 100%; border-collapse: collapse; }
+          td { padding: 10px 0; border-bottom: 1px solid #eee4d3; vertical-align: top; }
+        </style>
+      </head>
+      <body>
+        <div class="ticket">
+          <h1>Constancia de cita</h1>
+          <p>Atención de proveedores - Grupo Santis</p>
+          <table>
+            <tr><td><strong>Proveedor</strong></td><td>${escapeHtml(appointment.vendorName || providerState.vendorName)}</td></tr>
+            <tr><td><strong>Código de proveedor</strong></td><td>${escapeHtml(appointment.vendorCode || providerState.vendorCode)}</td></tr>
+            <tr><td><strong>Fecha</strong></td><td>${escapeHtml(appointment.slotDate)}</td></tr>
+            <tr><td><strong>Hora</strong></td><td>${escapeHtml(appointment.slotLabel)}</td></tr>
+            <tr><td><strong>Estado</strong></td><td>${escapeHtml(appointment.appointmentStatus)}</td></tr>
+            <tr><td><strong>OC</strong></td><td>${escapeHtml(appointment.ocNumber || "No registrada")}</td></tr>
+            <tr><td><strong>Código de acceso</strong></td><td>${escapeHtml(appointment.accessCode || "Se enviará por correo")}</td></tr>
+          </table>
+        </div>
+      </body>
+    </html>
+  `;
+
+  const blob = new Blob([content], { type: "text/html;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `cita-${appointment.slotDate || "proveedor"}.html`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
 async function api(action, payload) {
   const response = await fetch(`${API_BASE}/${action}`, {
     method: "POST",
@@ -225,7 +288,7 @@ async function api(action, payload) {
 
   const data = await response.json();
   if (!response.ok || !data.ok) {
-    throw new Error(data.error || "No se pudo completar la operacion.");
+    throw new Error(data.error || "No se pudo completar la operación.");
   }
   return data.data;
 }
@@ -239,6 +302,15 @@ function showMessage(text, type) {
   const box = document.getElementById("message");
   box.textContent = text;
   box.className = `message ${type}`;
+}
+
+function resetProviderView() {
+  providerState = null;
+  appointmentsState = [];
+  document.getElementById("providerSummary").classList.add("hidden");
+  document.getElementById("appointmentPanel").classList.add("hidden");
+  document.getElementById("appointmentsHistory").classList.add("hidden");
+  document.getElementById("warnings").innerHTML = "";
 }
 
 function escapeHtml(value) {

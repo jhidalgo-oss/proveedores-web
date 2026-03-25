@@ -162,7 +162,7 @@ function getProviderDashboard(criteria) {
   if (!provider) {
     return {
       found: false,
-      message: 'No encontramos un proveedor con ese codigo y correo.'
+      message: 'No encontramos un proveedor con ese código y correo.'
     };
   }
 
@@ -186,24 +186,25 @@ function registerProvider(payload) {
   var clean = normalizeProviderPayload_(payload);
   var providers = getSheetData_(APP_DEFAULTS.sheets.providers);
   var existing = providers.find(function(row) {
-    return sameText_(row.vendorCode, clean.vendorCode) || sameText_(row.email, clean.email);
+    var sameTaxId = clean.taxId && digitsOnly_(row.taxId) === clean.taxId;
+    return sameText_(row.email, clean.email) || sameTaxId;
   });
-  var sapResult = validateVendorAgainstSap_(clean.vendorCode, clean.taxId);
+  var sapResult = validateVendorAgainstSap_(clean.sapVendorCode, clean.taxId);
 
   if (config.strictSapValidation && sapResult.catalogLoaded && !sapResult.matched) {
-    throw new Error('El proveedor no existe en el padron SAP. Verifica el codigo antes de continuar.');
+    throw new Error('El proveedor no existe en el padrón SAP. Verifica los datos antes de continuar.');
   }
 
   var now = nowIso_();
   var record = existing || {};
   record.providerId = record.providerId || nextId_('PRV');
-  record.vendorCode = clean.vendorCode;
+  record.vendorCode = record.vendorCode || generateProviderCode_();
   record.vendorName = sapResult.vendorName || clean.vendorName;
   record.taxId = clean.taxId;
   record.contactName = clean.contactName;
   record.email = clean.email;
   record.phone = clean.phone;
-  record.ocNumber = clean.ocNumber;
+  record.ocNumber = record.ocNumber || '';
   record.sapStatus = sapResult.status;
   record.createdAt = record.createdAt || now;
   record.updatedAt = now;
@@ -221,8 +222,8 @@ function registerProvider(payload) {
   return {
     ok: true,
     message: record.registrationStatus === PROVIDER_STATUS.APPROVED
-      ? 'Tus datos fueron actualizados. Ya puedes solicitar una cita.'
-      : 'Registro enviado. Freddy debe aprobar tu alta para que puedas pedir una cita.',
+      ? 'Tus datos fueron actualizados. Tu código de proveedor es ' + record.vendorCode + '. Ya puedes solicitar una cita.'
+      : 'Registro enviado. Tu código de proveedor es ' + record.vendorCode + '. Grupo Santis validará y autorizará tu solicitud.',
     provider: cleanRow_(record),
     sap: sapResult
   };
@@ -241,7 +242,7 @@ function requestAppointment(payload) {
     throw new Error('Primero registra al proveedor y confirma el correo usado.');
   }
   if (provider.registrationStatus !== PROVIDER_STATUS.APPROVED) {
-    throw new Error('El proveedor aun no esta aprobado por Freddy.');
+    throw new Error('El proveedor aún no está aprobado por Grupo Santis.');
   }
 
   var slotStart = parseLocalDateTime_(clean.startIso);
@@ -277,7 +278,7 @@ function requestAppointment(payload) {
 
   return {
     ok: true,
-    message: 'Tu solicitud de cita fue registrada y queda pendiente de aprobacion.',
+    message: 'Tu solicitud de cita fue registrada y queda pendiente de aprobación.',
     appointment: cleanRow_(appointment)
   };
 }
@@ -680,13 +681,13 @@ function getProviderAppointments_(providerId) {
 function buildProviderWarnings_(provider) {
   var warnings = [];
   if (provider.sapStatus === 'SIN_PADRON') {
-    warnings.push('No hay un padron SAP cargado aun. La validacion se hara manualmente.');
+    warnings.push('No hay un padrón SAP cargado aún. La validación se hará manualmente.');
   }
   if (provider.sapStatus === 'NO_ENCONTRADO') {
     warnings.push('El proveedor no fue encontrado en SAP y debe revisarse manualmente.');
   }
   if (provider.registrationStatus === PROVIDER_STATUS.PENDING) {
-    warnings.push('Freddy debe aprobar primero el alta del proveedor.');
+    warnings.push('Grupo Santis debe validar primero el alta del proveedor.');
   }
   return warnings;
 }
@@ -876,31 +877,23 @@ function assertSlotAvailable_(startIso, currentAppointmentId) {
 function normalizeProviderPayload_(payload) {
   payload = payload || {};
   var email = String(payload.email || '').trim().toLowerCase();
-  var vendorCode = digitsOnly_(payload.vendorCode);
   var taxId = digitsOnly_(payload.taxId);
-  var ocNumber = digitsOnly_(payload.ocNumber || '');
+  var sapVendorCode = digitsOnly_(payload.sapVendorCode || '');
 
-  if (!vendorCode) {
-    throw new Error('El codigo del proveedor es obligatorio.');
-  }
   if (!String(payload.vendorName || '').trim()) {
-    throw new Error('La razon social o nombre del proveedor es obligatoria.');
+    throw new Error('La razón social o nombre del proveedor es obligatoria.');
   }
   if (!email || !isValidEmail_(email)) {
-    throw new Error('Debes registrar un correo valido.');
-  }
-  if (payload.ocNumber && !ocNumber) {
-    throw new Error('La OC solo debe tener numeros.');
+    throw new Error('Debes registrar un correo válido.');
   }
 
   return {
-    vendorCode: vendorCode,
     vendorName: String(payload.vendorName || '').trim(),
     taxId: taxId,
+    sapVendorCode: sapVendorCode,
     contactName: String(payload.contactName || '').trim(),
     email: email,
     phone: String(payload.phone || '').trim(),
-    ocNumber: ocNumber,
     notes: String(payload.notes || '').trim()
   };
 }
@@ -942,10 +935,10 @@ function sendProviderApprovalEmail_(provider) {
   var subject = 'Proveedor aprobado para solicitar citas';
   var body = [
     '<p>Hola ' + escapeHtml_(provider.contactName || provider.vendorName) + ',</p>',
-    '<p>Tu registro fue aprobado por ' + escapeHtml_(getRuntimeConfig_().supervisorName) + '.</p>',
+    '<p>Tu registro fue aprobado por Grupo Santis.</p>',
     '<p>Desde este momento ya puedes ingresar al portal del proveedor y solicitar una cita disponible.</p>',
     '<p>Proveedor: <strong>' + escapeHtml_(provider.vendorName) + '</strong><br>',
-    'Codigo: <strong>' + escapeHtml_(provider.vendorCode) + '</strong></p>'
+    'Código de proveedor: <strong>' + escapeHtml_(provider.vendorCode) + '</strong></p>'
   ].join('');
   MailApp.sendEmail({
     to: provider.email,
@@ -964,13 +957,13 @@ function sendAppointmentEmail_(appointment, isReschedule) {
   var body = [
     '<p>Estimado proveedor,</p>',
     '<p>Tu cita fue ' + (isReschedule ? 'reasignada y confirmada' : 'aprobada') + '.</p>',
-    '<p><strong>Presenta este correo en Vigilandia para tu ingreso.</strong></p>',
+    '<p><strong>Presenta este correo en recepción o consérvalo como constancia digital.</strong></p>',
     '<table style="border-collapse:collapse;">',
     '<tr><td style="padding:4px 10px 4px 0;"><strong>Proveedor</strong></td><td>' + escapeHtml_(appointment.vendorName) + '</td></tr>',
-    '<tr><td style="padding:4px 10px 4px 0;"><strong>Codigo</strong></td><td>' + escapeHtml_(appointment.vendorCode) + '</td></tr>',
+    '<tr><td style="padding:4px 10px 4px 0;"><strong>Código</strong></td><td>' + escapeHtml_(appointment.vendorCode) + '</td></tr>',
     '<tr><td style="padding:4px 10px 4px 0;"><strong>Fecha</strong></td><td>' + escapeHtml_(formatLongDate_(start)) + '</td></tr>',
     '<tr><td style="padding:4px 10px 4px 0;"><strong>Hora</strong></td><td>' + escapeHtml_(appointment.slotLabel) + '</td></tr>',
-    '<tr><td style="padding:4px 10px 4px 0;"><strong>Codigo de acceso</strong></td><td>' + escapeHtml_(appointment.accessCode) + '</td></tr>',
+    '<tr><td style="padding:4px 10px 4px 0;"><strong>Código de acceso</strong></td><td>' + escapeHtml_(appointment.accessCode) + '</td></tr>',
     '<tr><td style="padding:4px 10px 4px 0;"><strong>OC</strong></td><td>' + escapeHtml_(appointment.ocNumber || 'No registrada') + '</td></tr>',
     '</table>',
     appointment.outsideSchedule === 'SI'
@@ -1129,6 +1122,10 @@ function cleanRow_(row) {
 
 function nextId_(prefix) {
   return prefix + '-' + Utilities.getUuid().split('-')[0].toUpperCase();
+}
+
+function generateProviderCode_() {
+  return 'PRV' + Utilities.getUuid().replace(/-/g, '').slice(0, 6).toUpperCase();
 }
 
 function generateAccessCode_() {

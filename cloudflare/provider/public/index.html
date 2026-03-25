@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Atencion de Proveedores | Grupo Santis</title>
+    <title>Atención de Proveedores | Grupo Santis</title>
     <link rel="stylesheet" href="./styles.css">
   </head>
   <body>
@@ -12,40 +12,36 @@
         <div class="brand-lockup">
           <img class="brand-mark" src="./logo-santis.png" alt="Grupo Santis">
           <div class="brand-copy">
-            <small>Recepcion y agenda</small>
-            <strong>Atencion de proveedores</strong>
+            <strong>Atención de proveedores</strong>
           </div>
-        </div>
-        <div class="pillset">
-          <span class="pill">30 min por cita</span>
-          <span class="pill">Cloudflare ready</span>
-          <span class="pill">Correo automatico</span>
         </div>
       </div>
 
       <header class="hero">
         <section class="hero-main">
           <div class="hero-content">
-            <span class="hero-kicker">Portal de proveedores</span>
-            <h1>Solicita tu cita sin cruces ni huecos manuales</h1>
-            <p class="hero-copy">
-              El proveedor se registra, Freddy valida el alta y luego elige una ventana disponible. Cada bloque se reserva cada 30 minutos y desaparece del calendario cuando queda tomado.
-            </p>
+            <span class="hero-kicker">PORTAL DE PROVEEDORES</span>
+            <h1>Solicita tu cita y mejora tu experiencia</h1>
+            <div class="hero-flow">
+              <p>1. El proveedor se registra.</p>
+              <p>2. Solicita su cita. (Grupo Santis valida y autoriza)</p>
+              <p>3. Descarga tu cita en esta web o en el correo registrado.</p>
+            </div>
             <div class="hero-metrics">
               <div class="hero-metric">
-                <span class="mini-label">Lun - Mie</span>
+                <span class="mini-label">Lunes a miércoles</span>
                 <strong>08:00 - 16:00</strong>
-                <span>Operacion regular</span>
+                <span>Atención regular</span>
               </div>
               <div class="hero-metric">
-                <span class="mini-label">Jue - Vie</span>
+                <span class="mini-label">Jueves y viernes</span>
                 <strong>08:00 - 12:30</strong>
-                <span>Bloques de media hora</span>
+                <span>Citas cada 30 minutos</span>
               </div>
               <div class="hero-metric">
-                <span class="mini-label">Ingreso</span>
-                <strong>Vigilandia</strong>
-                <span>Con correo de confirmacion</span>
+                <span class="mini-label">Confirmación</span>
+                <strong>Correo registrado</strong>
+                <span>Y descarga desde esta web</span>
               </div>
             </div>
           </div>
@@ -56,13 +52,13 @@
             <p class="eyebrow">Estados del calendario</p>
             <div class="legend">
               <span class="legend-item"><span class="chip chip-approved"></span>Aprobado</span>
-              <span class="legend-item"><span class="chip chip-pending"></span>Pendiente aprobacion</span>
+              <span class="legend-item"><span class="chip chip-pending"></span>Pendiente de aprobación</span>
               <span class="legend-item"><span class="chip chip-available"></span>Disponible</span>
             </div>
           </div>
           <div class="mini-panel">
-            <p class="eyebrow">Flujo</p>
-            <p class="lead">Registro del proveedor, aprobacion por Freddy y solicitud de cita con correo final para presentar en seguridad.</p>
+            <p class="eyebrow">Ingreso</p>
+            <p class="lead">Si ya estás registrado, inicia sesión con tu código de proveedor y tu correo para ver tu histórico y pedir una nueva cita.</p>
           </div>
         </aside>
       </header>
@@ -72,11 +68,9 @@
       <section class="grid two">
         <article class="card">
           <h2>1. Registro del proveedor</h2>
+          <p class="muted">Tu código de proveedor se genera automáticamente después del registro.</p>
           <form id="registerForm" class="stack">
-            <label>Codigo proveedor
-              <input name="vendorCode" inputmode="numeric" required>
-            </label>
-            <label>Razon social
+            <label>Razón social
               <input name="vendorName" required>
             </label>
             <label>RUC o documento
@@ -88,32 +82,31 @@
             <label>Correo obligatorio
               <input name="email" type="email" required>
             </label>
-            <label>Telefono
+            <label>Teléfono
               <input name="phone">
-            </label>
-            <label>OC opcional
-              <input name="ocNumber" inputmode="numeric" placeholder="Solo numeros">
             </label>
             <label>Observaciones
               <textarea name="notes" rows="3"></textarea>
             </label>
-            <button type="submit" class="button primary">Registrar proveedor</button>
+            <button type="submit" class="button primary">Registrarme</button>
           </form>
         </article>
 
         <article class="card">
-          <h2>2. Consultar estado y pedir cita</h2>
+          <h2>2. Inicia sesión</h2>
+          <p class="muted">Consulta tu estado, revisa tu histórico de citas y solicita una nueva cuando tengas autorización.</p>
           <form id="lookupForm" class="stack">
-            <label>Codigo proveedor
-              <input name="vendorCode" inputmode="numeric" required>
+            <label>Código de proveedor
+              <input name="vendorCode" required>
             </label>
             <label>Correo registrado
               <input name="email" type="email" required>
             </label>
-            <button type="submit" class="button">Ver mi estado</button>
+            <button type="submit" class="button">Ingresar</button>
           </form>
 
           <div id="providerSummary" class="summary hidden"></div>
+          <div id="generatedCodeBox" class="summary hidden"></div>
           <div id="warnings" class="stack"></div>
         </article>
       </section>
@@ -121,8 +114,8 @@
       <section id="appointmentPanel" class="card hidden">
         <div class="section-header">
           <div>
-            <h2>3. Calendario disponible</h2>
-            <p class="muted">Horarios normales: lunes a miercoles 08:00-16:00, jueves y viernes 08:00-12:30.</p>
+            <h2>3. Solicita una nueva cita</h2>
+            <p class="muted">Horarios normales: lunes a miércoles 08:00-16:00, jueves y viernes 08:00-12:30.</p>
           </div>
           <button id="refreshCalendar" class="button subtle" type="button">Actualizar</button>
         </div>
@@ -134,8 +127,8 @@
             <strong>Cita seleccionada:</strong>
             <span id="selectedSlotLabel">Ninguna</span>
           </div>
-          <label>OC para la cita
-            <input id="appointmentOc" inputmode="numeric" placeholder="Solo numeros">
+          <label>OC opcional
+            <input id="appointmentOc" inputmode="numeric" placeholder="Solo números">
           </label>
           <label>Notas
             <textarea id="appointmentNotes" rows="3" placeholder="Detalle de visita, carga, descarga, etc."></textarea>
@@ -145,13 +138,9 @@
       </section>
 
       <section id="appointmentsHistory" class="card hidden">
-        <h2>Mis citas</h2>
+        <h2>Mi histórico de citas</h2>
         <div id="appointmentsTable"></div>
       </section>
-
-      <div class="footer-note">
-        Esta version del proveedor ya esta preparada para Cloudflare Pages con un proxy serverless hacia Apps Script.
-      </div>
     </div>
     <script src="./app.js"></script>
   </body>
