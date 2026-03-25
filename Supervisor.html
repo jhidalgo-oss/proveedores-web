@@ -213,6 +213,7 @@
               <p>${escapeHtml(item.slotDate)} | ${escapeHtml(item.slotLabel)} | ${escapeHtml(item.email)}</p>
               <p>OC: ${escapeHtml(item.ocNumber || '')}</p>
               <p>Area: ${escapeHtml(item.ocArea || 'Sin definir')} | Entrega: ${escapeHtml(item.ocDeliveryDate || 'Sin fecha')}</p>
+              <p>Comprador: ${escapeHtml(item.ocBuyerName || 'Sin definir')} | Grupos: ${escapeHtml(item.ocItemGroups || 'Sin definir')}</p>
               <p>Resumen OC: ${escapeHtml(item.ocItemsSummary || 'Sin detalle disponible')}</p>
               <div class="inline">
                 <button class="button primary" type="button" onclick="approveAppointmentAction('${item.appointmentId}')">Aprobar</button>

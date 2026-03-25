@@ -218,6 +218,8 @@ function renderPendingPurchaseOrders() {
       order.poNumber,
       order.area,
       order.areaCodes,
+      order.itemGroups,
+      order.buyerName,
       order.itemsSummary,
       order.deliveryDate
     ].join(" ").toLowerCase();
@@ -270,9 +272,22 @@ function renderSelectedPurchaseOrderSummary() {
     "<p><strong>Area:</strong> " + escapeHtml(selected.area || "No definida") + "</p>",
     "<p><strong>Ubicaci\u00f3n SAP:</strong> " + escapeHtml(selected.areaCodes || selected.storageLocation || "No definida") + "</p>",
     "<p><strong>Fecha entrega:</strong> " + escapeHtml(selected.deliveryDate || "Sin fecha") + "</p>",
+    "<p><strong>Grupo:</strong> " + escapeHtml(selected.itemGroups || "Sin definir") + "</p>",
+    "<p><strong>Pendiente:</strong> " + escapeHtml(formatQuantity(selected.openQtyTotal, selected.totalUom) || "Sin dato") + "</p>",
     "<p><strong>Lineas:</strong> " + escapeHtml(String(selected.lineCount || 0)) + "</p>",
     "<p><strong>Resumen:</strong> " + escapeHtml(selected.itemsSummary || "Sin detalle de materiales") + "</p>"
   ].join("");
+}
+
+function formatQuantity(value, uom) {
+  const numeric = Number(value || 0);
+  if (!numeric) {
+    return "";
+  }
+  const normalized = String(Math.round(numeric * 100) / 100)
+    .replace(/\.0+$/, "")
+    .replace(/(\.\d*[1-9])0+$/, "$1");
+  return uom ? normalized + " " + uom : normalized;
 }
 
 function renderCalendar(calendar) {

@@ -71,6 +71,8 @@ SHEET_HEADERS[APP_DEFAULTS.sheets.appointments] = [
   'email',
   'ocNumber',
   'ocArea',
+  'ocBuyerName',
+  'ocItemGroups',
   'ocItemsSummary',
   'ocDeliveryDate',
   'ocLineCount',
@@ -103,9 +105,13 @@ SHEET_HEADERS[APP_DEFAULTS.sheets.sapOpenOrders] = [
   'vendorName',
   'taxId',
   'deliveryDate',
+  'buyerName',
+  'itemGroupName',
   'materialCode',
   'materialDescription',
   'storageLocation',
+  'orderedQty',
+  'deliveredQty',
   'openQty',
   'uom',
   'status',
@@ -678,6 +684,8 @@ function createManualAppointment(payload) {
     email: provider.email,
     ocNumber: clean.ocNumber || provider.ocNumber || '',
     ocArea: '',
+    ocBuyerName: '',
+    ocItemGroups: '',
     ocItemsSummary: '',
     ocDeliveryDate: '',
     ocLineCount: '',
@@ -832,7 +840,7 @@ function getDefaultConfigRows_() {
     ['LOOKAHEAD_DAYS', String(config.lookaheadDays), 'Cuantos dias muestra el calendario'],
     ['STRICT_SAP_VALIDATION', config.strictSapValidation ? 'TRUE' : 'FALSE', 'Bloquea proveedores no encontrados en SAP'],
     ['SAP_REQUIRED_FIELDS', 'vendorCode,vendorName,taxId,active,lastSync', 'Campos minimos esperados del padron SAP'],
-    ['SAP_OPEN_ORDERS_FIELDS', 'poNumber,poItem,vendorCode,vendorName,taxId,deliveryDate,materialCode,materialDescription,storageLocation,openQty,uom,status,lastSync', 'Campos minimos esperados para OCs pendientes'],
+    ['SAP_OPEN_ORDERS_FIELDS', 'poNumber,poItem,vendorCode,vendorName,taxId,deliveryDate,buyerName,itemGroupName,materialCode,materialDescription,storageLocation,orderedQty,deliveredQty,openQty,uom,status,lastSync', 'Campos minimos esperados para OCs pendientes'],
     ['SAP_SYNC_ENABLED', sapSync.syncEnabled ? 'TRUE' : 'FALSE', 'Habilita la sincronizacion automatica desde una fuente SAP o middleware'],
     ['SAP_SYNC_INTERVAL_HOURS', String(sapSync.syncIntervalHours), 'Frecuencia del trigger automatico en horas'],
     ['SAP_PROVIDER_SOURCE_URL', sapSync.providerSourceUrl, 'Endpoint HTTPS para proveedores SAP en JSON o CSV'],
@@ -1448,9 +1456,13 @@ function mapSapOpenOrderRecord_(row) {
     vendorName: normalizeSapText_(pickField_(row, ['vendorName', 'supplierName', 'name1', 'VendorName', 'NAME1'])),
     taxId: digitsOnly_(pickField_(row, ['taxId', 'ruc', 'stcd1', 'TaxId', 'STCD1'])),
     deliveryDate: normalizeSapDate_(pickField_(row, ['deliveryDate', 'delivery', 'eindt', 'DeliveryDate', 'EINDT'])),
+    buyerName: normalizeSapText_(pickField_(row, ['buyerName', 'buyer', 'uname', 'UserName', 'U_NAME'])),
+    itemGroupName: normalizeSapText_(pickField_(row, ['itemGroupName', 'itemGroup', 'materialGroupName', 'ItemGroupName', 'ItmsGrpNam', 'GroupName'])),
     materialCode: normalizeSapText_(pickField_(row, ['materialCode', 'material', 'matnr', 'MaterialCode', 'MATNR'])),
     materialDescription: normalizeSapText_(pickField_(row, ['materialDescription', 'description', 'txz01', 'maktx', 'MaterialDescription', 'TXZ01'])),
     storageLocation: normalizeSapText_(pickField_(row, ['storageLocation', 'lgort', 'StorageLocation', 'LGORT'])),
+    orderedQty: String(orderedQty),
+    deliveredQty: String(receivedQty),
     openQty: String(computedOpenQty),
     uom: normalizeSapText_(pickField_(row, ['uom', 'unit', 'meins', 'UOM', 'MEINS'])),
     status: normalizeSapText_(pickField_(row, ['status', 'Status'])) || 'ABIERTA',
@@ -1691,6 +1703,8 @@ function summarizePurchaseOrders_(rows) {
     var areas = uniqueValues_(storageLocations.map(function(code) {
       return resolveStorageLocationArea_(code, areaMap);
     }));
+    var itemGroups = uniqueValues_(items.map(function(item) { return item.itemGroupName; }));
+    var buyers = uniqueValues_(items.map(function(item) { return item.buyerName; }));
     var materials = uniqueValues_(items.map(function(item) {
       var description = String(item.materialDescription || '').trim();
       var code = String(item.materialCode || '').trim();
@@ -1702,6 +1716,33 @@ function summarizePurchaseOrders_(rows) {
       }
       return openQty ? base + ' (' + openQty + (uom ? ' ' + uom : '') + ')' : base;
     }));
+    var orderedQtyTotal = items.reduce(function(total, item) {
+      return total + Number(item.orderedQty || 0);
+    }, 0);
+    var deliveredQtyTotal = items.reduce(function(total, item) {
+      return total + Number(item.deliveredQty || 0);
+    }, 0);
+    var openQtyTotal = items.reduce(function(total, item) {
+      return total + Number(item.openQty || 0);
+    }, 0);
+    var primaryUom = uniqueValues_(items.map(function(item) { return item.uom; })).join(', ');
+    var summaryParts = [];
+
+    if (itemGroups.length) {
+      summaryParts.push('Grupo: ' + itemGroups.slice(0, 2).join(', '));
+    }
+    if (buyers.length) {
+      summaryParts.push('Comprador: ' + buyers.join(', '));
+    }
+    if (openQtyTotal > 0) {
+      summaryParts.push('Pendiente: ' + formatQuantityLabel_(openQtyTotal, primaryUom));
+    }
+    if (deliveredQtyTotal > 0) {
+      summaryParts.push('Entregado: ' + formatQuantityLabel_(deliveredQtyTotal, primaryUom));
+    }
+    if (materials.length) {
+      summaryParts.push('Materiales: ' + materials.slice(0, 3).join(', '));
+    }
 
     return cleanRow_({
       poNumber: poNumber,
@@ -1712,15 +1753,27 @@ function summarizePurchaseOrders_(rows) {
       area: areas.join(', '),
       areaCodes: storageLocations.join(', '),
       storageLocation: storageLocations.join(', '),
+      buyerName: buyers.join(', '),
+      itemGroups: itemGroups.join(', '),
       lineCount: items.length,
-      itemsSummary: materials.slice(0, 3).join(', '),
+      itemsSummary: summaryParts.join(' | '),
       materialCount: materials.length,
-      openQtyTotal: items.reduce(function(total, item) {
-        return total + Number(item.openQty || 0);
-      }, 0),
+      orderedQtyTotal: orderedQtyTotal,
+      deliveredQtyTotal: deliveredQtyTotal,
+      openQtyTotal: openQtyTotal,
+      totalUom: primaryUom,
       rows: items.map(cleanRow_)
     });
   }).sort(sortByDateField_('deliveryDate'));
+}
+
+function formatQuantityLabel_(value, uom) {
+  var numeric = Number(value || 0);
+  if (!numeric) {
+    return '';
+  }
+  var rounded = Math.round(numeric * 100) / 100;
+  return String(rounded).replace(/\.0+$/, '').replace(/(\.\d*[1-9])0+$/, '$1') + (uom ? ' ' + uom : '');
 }
 
 function resolveStorageLocationArea_(code, areaMap) {
@@ -1763,6 +1816,8 @@ function applyPurchaseOrderSnapshot_(appointment, openOrder) {
   }
   appointment.ocNumber = openOrder.poNumber || appointment.ocNumber || '';
   appointment.ocArea = openOrder.area || '';
+  appointment.ocBuyerName = openOrder.buyerName || '';
+  appointment.ocItemGroups = openOrder.itemGroups || '';
   appointment.ocItemsSummary = openOrder.itemsSummary || '';
   appointment.ocDeliveryDate = openOrder.deliveryDate || '';
   appointment.ocLineCount = String(openOrder.lineCount || '');
@@ -1777,7 +1832,7 @@ function enrichAppointmentWithOpenOrderContext_(appointment) {
   if (!copy.ocNumber) {
     return copy;
   }
-  if (copy.ocArea && copy.ocItemsSummary) {
+  if (copy.ocArea && copy.ocItemsSummary && copy.ocBuyerName && copy.ocItemGroups) {
     return copy;
   }
   applyPurchaseOrderSnapshot_(copy, getPendingPurchaseOrderForVendor_(copy.sapVendorCode || '', copy.ocNumber));
@@ -2202,6 +2257,8 @@ function requestAppointment(payload) {
     email: provider.email,
     ocNumber: selectedOpenOrder.poNumber,
     ocArea: '',
+    ocBuyerName: '',
+    ocItemGroups: '',
     ocItemsSummary: '',
     ocDeliveryDate: '',
     ocLineCount: '',
