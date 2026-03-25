@@ -480,6 +480,10 @@ h3 {
   gap: 14px;
 }
 
+.stack.dense.compact {
+  gap: 10px;
+}
+
 .top-gap {
   margin-top: var(--space-2);
 }
@@ -491,6 +495,31 @@ label {
   font-size: 14px;
   font-weight: 600;
   line-height: 1.45;
+}
+
+.readonly-group {
+  display: grid;
+  gap: 6px;
+}
+
+.field-label {
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.readonly-field {
+  display: flex;
+  align-items: center;
+  min-height: 46px;
+  padding: 10px 14px;
+  border-radius: var(--control-radius);
+  border: 1px solid rgba(54, 41, 22, 0.12);
+  background: rgba(255, 255, 255, 0.76);
+  color: var(--ink);
+  font-size: 15px;
+  line-height: 1.4;
 }
 
 input,
@@ -512,6 +541,13 @@ textarea {
   color: var(--ink);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
   transition: border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
+}
+
+.register-card input,
+.register-card select,
+.register-card textarea {
+  min-height: 46px;
+  padding: 11px 14px;
 }
 
 textarea {

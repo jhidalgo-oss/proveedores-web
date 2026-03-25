@@ -1,4 +1,4 @@
-const DEFAULT_APPS_SCRIPT_PROVIDER_API_URL = "https://script.google.com/macros/s/AKfycbyvppyJJ0grbQwp29YATDuu5bgj8WI7V22nVAi-JzYd9yh0bLexFnQyQrTr61PdXsf_/exec";
+const DEFAULT_APPS_SCRIPT_PROVIDER_API_URL = "https://script.google.com/macros/s/AKfycbzZgByFj4psNEtt0qblF3ZBIAq7ajlJY6-yo2xcMgElwExswKMOlxexzsUzJeXADEpf/exec";
 
 export async function onRequest(context) {
   const { request, env, params } = context;
@@ -48,7 +48,7 @@ export async function onRequest(context) {
 
     return json({
       ok: false,
-      error: "No pudimos cargar la disponibilidad en este momento. Intenta nuevamente en unos minutos."
+      error: errorForAction(action)
     }, 502);
   }
 
@@ -68,4 +68,22 @@ function json(payload, status) {
       "content-type": "application/json; charset=UTF-8"
     }
   });
+}
+
+function errorForAction(action) {
+  switch (action) {
+    case "providerBootstrap":
+    case "providerDashboard":
+      return "No pudimos cargar la disponibilidad en este momento. Intenta nuevamente en unos minutos.";
+    case "lookupRegistrationByTaxId":
+      return "No pudimos validar el RUC en este momento. Intenta nuevamente en unos minutos.";
+    case "registerProvider":
+      return "No pudimos completar tu registro en este momento. Intenta nuevamente en unos minutos.";
+    case "providerLogin":
+      return "No pudimos iniciar sesión en este momento. Intenta nuevamente en unos minutos.";
+    case "requestAppointment":
+      return "No pudimos registrar tu solicitud en este momento. Intenta nuevamente en unos minutos.";
+    default:
+      return "No se pudo completar la operación. Intenta nuevamente en unos minutos.";
+  }
 }

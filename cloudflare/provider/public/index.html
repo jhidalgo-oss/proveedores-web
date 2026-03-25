@@ -172,16 +172,21 @@
                 </div>
                 <p class="muted section-copy">Tu c&oacute;digo se genera autom&aacute;ticamente. Completa tus datos y deja un correo v&aacute;lido para futuras coordinaciones.</p>
 
-                <form id="registerForm" class="stack dense">
-                  <label>Raz&oacute;n social
-                    <input name="vendorName" required readonly>
-                  </label>
+                <form id="registerForm" class="stack dense compact">
                   <label>RUC o documento
                     <input name="taxId" inputmode="numeric" required>
                   </label>
                   <div id="registerLookupStatus" class="helper-text"></div>
+                  <div class="readonly-group">
+                    <span class="field-label">Raz&oacute;n social</span>
+                    <div id="vendorNameResult" class="readonly-field">Se completar&aacute; al validar el RUC.</div>
+                    <input name="vendorName" type="hidden">
+                  </div>
                   <label>Nombre y Apellidos persona de contacto
                     <input name="contactName">
+                  </label>
+                  <label>Tel&eacute;fono
+                    <input name="phone">
                   </label>
                   <label>Correo obligatorio
                     <input name="email" type="email" required>
@@ -191,12 +196,6 @@
                   </label>
                   <label>Confirmar contrase&ntilde;a
                     <input name="passwordConfirm" type="password" required>
-                  </label>
-                  <label>Tel&eacute;fono
-                    <input name="phone">
-                  </label>
-                  <label>Comentario: es importante para nosotros lo que tengas que decir.
-                    <textarea name="notes" rows="3"></textarea>
                   </label>
                   <p class="helper-text">El correo es obligatorio. Si m&aacute;s adelante necesitas cambiarlo, la actualizaci&oacute;n solo puede hacerla Grupo Santis.</p>
                   <button type="submit" class="button secondary wide">Registrarme</button>

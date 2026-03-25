@@ -83,11 +83,13 @@ async function lookupRegistrationVendor() {
   const form = document.getElementById("registerForm");
   const taxIdInput = form.querySelector('input[name="taxId"]');
   const vendorNameInput = form.querySelector('input[name="vendorName"]');
+  const vendorNameResult = document.getElementById("vendorNameResult");
   const status = document.getElementById("registerLookupStatus");
   const digits = String(taxIdInput.value || "").replace(/\D/g, "");
 
   if (!digits) {
     vendorNameInput.value = "";
+    vendorNameResult.textContent = "Se completará al validar el RUC.";
     status.textContent = "";
     return;
   }
@@ -98,14 +100,17 @@ async function lookupRegistrationVendor() {
     const response = await api("lookupRegistrationByTaxId", { taxId: digits });
     if (!response.found) {
       vendorNameInput.value = "";
+      vendorNameResult.textContent = "No encontramos una razón social disponible para ese RUC.";
       status.textContent = response.message || "No encontramos OCs abiertas para ese RUC.";
       return;
     }
 
     vendorNameInput.value = response.vendorName || "";
+    vendorNameResult.textContent = response.vendorName || "Razón social encontrada.";
     status.textContent = "Razón social encontrada. OCs abiertas: " + String(response.openOrders || 0) + ".";
   } catch (error) {
     vendorNameInput.value = "";
+    vendorNameResult.textContent = "No pudimos validar el RUC en este momento.";
     status.textContent = error.message || "No pudimos validar el RUC en este momento.";
   }
 }
@@ -113,6 +118,7 @@ async function lookupRegistrationVendor() {
 function resetRegistrationLookupState() {
   const form = document.getElementById("registerForm");
   form.querySelector('input[name="vendorName"]').value = "";
+  document.getElementById("vendorNameResult").textContent = "Se completará al validar el RUC.";
   document.getElementById("registerLookupStatus").textContent = "";
 }
 
