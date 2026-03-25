@@ -2032,7 +2032,6 @@ function registerProvider(payload) {
     throw new Error('No tiene OCs abiertas en este momento. Cuando exista una OC pendiente podra registrarse y solicitar su cita.');
   }
   var primaryOpenOrder = eligibleOpenOrders[0];
-  var sapResult = validateVendorAgainstSap_(primaryOpenOrder.vendorCode, clean.taxId);
 
   var existing = findProvider_({
     taxId: clean.taxId,
@@ -2052,14 +2051,14 @@ function registerProvider(payload) {
   var record = existing || {};
   record.providerId = record.providerId || nextId_('PRV');
   record.vendorCode = record.vendorCode || generateProviderCode_();
-  record.sapVendorCode = primaryOpenOrder.vendorCode || sapResult.sapVendorCode || clean.sapVendorCode;
-  record.vendorName = primaryOpenOrder.vendorName || sapResult.vendorName || clean.vendorName;
+  record.sapVendorCode = primaryOpenOrder.vendorCode || clean.sapVendorCode;
+  record.vendorName = primaryOpenOrder.vendorName || clean.vendorName;
   record.taxId = clean.taxId;
   record.contactName = clean.contactName;
   record.email = clean.email;
   record.phone = clean.phone;
   record.ocNumber = primaryOpenOrder.poNumber || record.ocNumber || '';
-  record.sapStatus = 'OC_ABIERTA';
+  record.sapStatus = 'OC_ABIERTA_VIGENTE';
   record.createdAt = record.createdAt || now;
   record.updatedAt = now;
   record.notes = clean.notes;
@@ -2081,7 +2080,10 @@ function registerProvider(payload) {
   authResponse.message = record.registrationStatus === PROVIDER_STATUS.APPROVED
     ? 'Tu cuenta fue activada correctamente. Ya puedes solicitar citas.'
     : 'Tu cuenta fue creada. Grupo Santis validara y autorizara tu alta antes de solicitar citas.';
-  authResponse.sap = sapResult;
+  authResponse.eligibility = {
+    source: 'SAP_OC_PENDIENTES',
+    openOrders: eligibleOpenOrders.length
+  };
   authResponse.openOrders = eligibleOpenOrders;
   return authResponse;
 }
@@ -2424,12 +2426,6 @@ function validateVendorAgainstSap_(vendorCode, taxId) {
 
 function buildProviderWarnings_(provider, pendingPurchaseOrders) {
   var warnings = [];
-  if (provider.sapStatus === 'SIN_PADRON') {
-    warnings.push('No hay un padron SAP cargado aun. La validacion se hara manualmente.');
-  }
-  if (provider.sapStatus === 'NO_ENCONTRADO') {
-    warnings.push('El proveedor no fue encontrado en SAP y debe revisarse manualmente.');
-  }
   if (provider.registrationStatus === PROVIDER_STATUS.PENDING) {
     warnings.push('Grupo Santis debe validar primero el alta del proveedor.');
   }

@@ -188,7 +188,7 @@
             <article class="list-card">
               <strong>${escapeHtml(item.vendorName)}</strong>
               <p>Codigo: ${escapeHtml(item.vendorCode)} | Correo: ${escapeHtml(item.email)}</p>
-              <p>RUC: ${escapeHtml(item.taxId || '')} | SAP: ${escapeHtml(item.sapStatus || '')}</p>
+              <p>RUC: ${escapeHtml(item.taxId || '')} | Elegibilidad: ${escapeHtml(item.sapStatus || 'OC abierta vigente')}</p>
               <div class="inline">
                 <button class="button primary" type="button" onclick="approveProviderAction('${item.providerId}')">Aprobar</button>
                 <button class="button" type="button" onclick="rejectProviderAction('${item.providerId}')">Rechazar</button>
