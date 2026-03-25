@@ -93,14 +93,8 @@ SHEET_HEADERS[APP_DEFAULTS.sheets.sap] = [
   'vendorCode',
   'vendorName',
   'taxId',
-  'email',
-  'phone',
-  'companyCode',
-  'purchasingOrg',
-  'blockedForPurchasing',
   'active',
-  'lastSync',
-  'notes'
+  'lastSync'
 ];
 SHEET_HEADERS[APP_DEFAULTS.sheets.sapOpenOrders] = [
   'poNumber',
@@ -108,22 +102,14 @@ SHEET_HEADERS[APP_DEFAULTS.sheets.sapOpenOrders] = [
   'vendorCode',
   'vendorName',
   'taxId',
-  'documentDate',
   'deliveryDate',
   'materialCode',
   'materialDescription',
-  'plant',
   'storageLocation',
-  'orderedQty',
-  'receivedQty',
   'openQty',
   'uom',
   'status',
-  'buyer',
-  'companyCode',
-  'purchasingOrg',
-  'lastSync',
-  'notes'
+  'lastSync'
 ];
 SHEET_HEADERS[APP_DEFAULTS.sheets.audit] = [
   'timestamp',
@@ -845,8 +831,8 @@ function getDefaultConfigRows_() {
     ['MAX_ADVANCE_DAYS', String(config.maxAdvanceDays), 'Cuantos dias hacia adelante se permiten'],
     ['LOOKAHEAD_DAYS', String(config.lookaheadDays), 'Cuantos dias muestra el calendario'],
     ['STRICT_SAP_VALIDATION', config.strictSapValidation ? 'TRUE' : 'FALSE', 'Bloquea proveedores no encontrados en SAP'],
-    ['SAP_REQUIRED_FIELDS', 'vendorCode,taxId,vendorName,active,lastSync', 'Campos minimos esperados del padron SAP'],
-    ['SAP_OPEN_ORDERS_FIELDS', 'poNumber,vendorCode,openQty,status,lastSync', 'Campos minimos esperados para OCs pendientes'],
+    ['SAP_REQUIRED_FIELDS', 'vendorCode,vendorName,taxId,active,lastSync', 'Campos minimos esperados del padron SAP'],
+    ['SAP_OPEN_ORDERS_FIELDS', 'poNumber,poItem,vendorCode,vendorName,taxId,deliveryDate,materialCode,materialDescription,storageLocation,openQty,uom,status,lastSync', 'Campos minimos esperados para OCs pendientes'],
     ['SAP_SYNC_ENABLED', sapSync.syncEnabled ? 'TRUE' : 'FALSE', 'Habilita la sincronizacion automatica desde una fuente SAP o middleware'],
     ['SAP_SYNC_INTERVAL_HOURS', String(sapSync.syncIntervalHours), 'Frecuencia del trigger automatico en horas'],
     ['SAP_PROVIDER_SOURCE_URL', sapSync.providerSourceUrl, 'Endpoint HTTPS para proveedores SAP en JSON o CSV'],
@@ -1444,14 +1430,8 @@ function mapSapProviderRecord_(row) {
     vendorCode: normalizeSapText_(pickField_(row, ['vendorCode', 'supplierCode', 'vendor', 'code', 'lifnr', 'VendorCode', 'LIFNR'])),
     vendorName: normalizeSapText_(pickField_(row, ['vendorName', 'supplierName', 'name', 'name1', 'companyName', 'VendorName', 'NAME1'])),
     taxId: digitsOnly_(pickField_(row, ['taxId', 'ruc', 'taxNumber', 'vatNumber', 'stcd1', 'RUC', 'STCD1'])),
-    email: normalizeSapText_(pickField_(row, ['email', 'smtp_addr', 'smtpAddr', 'mail', 'Email', 'SMTP_ADDR'])),
-    phone: normalizeSapText_(pickField_(row, ['phone', 'telephone', 'tel_number', 'tel1_numbr', 'Phone', 'TEL_NUMBER'])),
-    companyCode: normalizeSapText_(pickField_(row, ['companyCode', 'bukrs', 'CompanyCode', 'BUKRS'])),
-    purchasingOrg: normalizeSapText_(pickField_(row, ['purchasingOrg', 'ekorg', 'PurchasingOrg', 'EKORG'])),
-    blockedForPurchasing: normalizeSapBoolean_(pickField_(row, ['blockedForPurchasing', 'purchasingBlock', 'sperm', 'SPERM'])),
     active: normalizeSapActiveValue_(pickField_(row, ['active', 'status', 'isActive', 'Active', 'STATUS'])),
-    lastSync: normalizeSapText_(pickField_(row, ['lastSync', 'lastUpdated', 'syncAt', 'LastSync'])) || now,
-    notes: normalizeSapText_(pickField_(row, ['notes', 'observation', 'comment', 'Notes']))
+    lastSync: normalizeSapText_(pickField_(row, ['lastSync', 'lastUpdated', 'syncAt', 'LastSync'])) || now
   };
 }
 
@@ -1467,22 +1447,14 @@ function mapSapOpenOrderRecord_(row) {
     vendorCode: normalizeSapText_(pickField_(row, ['vendorCode', 'supplierCode', 'lifnr', 'VendorCode', 'LIFNR'])),
     vendorName: normalizeSapText_(pickField_(row, ['vendorName', 'supplierName', 'name1', 'VendorName', 'NAME1'])),
     taxId: digitsOnly_(pickField_(row, ['taxId', 'ruc', 'stcd1', 'TaxId', 'STCD1'])),
-    documentDate: normalizeSapDate_(pickField_(row, ['documentDate', 'docDate', 'bedat', 'DocumentDate', 'BEDAT'])),
     deliveryDate: normalizeSapDate_(pickField_(row, ['deliveryDate', 'delivery', 'eindt', 'DeliveryDate', 'EINDT'])),
     materialCode: normalizeSapText_(pickField_(row, ['materialCode', 'material', 'matnr', 'MaterialCode', 'MATNR'])),
     materialDescription: normalizeSapText_(pickField_(row, ['materialDescription', 'description', 'txz01', 'maktx', 'MaterialDescription', 'TXZ01'])),
-    plant: normalizeSapText_(pickField_(row, ['plant', 'werks', 'Plant', 'WERKS'])),
     storageLocation: normalizeSapText_(pickField_(row, ['storageLocation', 'lgort', 'StorageLocation', 'LGORT'])),
-    orderedQty: String(orderedQty),
-    receivedQty: String(receivedQty),
     openQty: String(computedOpenQty),
     uom: normalizeSapText_(pickField_(row, ['uom', 'unit', 'meins', 'UOM', 'MEINS'])),
     status: normalizeSapText_(pickField_(row, ['status', 'Status'])) || 'ABIERTA',
-    buyer: normalizeSapText_(pickField_(row, ['buyer', 'buyerGroup', 'ekgrp', 'Buyer', 'EKGRP'])),
-    companyCode: normalizeSapText_(pickField_(row, ['companyCode', 'bukrs', 'CompanyCode', 'BUKRS'])),
-    purchasingOrg: normalizeSapText_(pickField_(row, ['purchasingOrg', 'ekorg', 'PurchasingOrg', 'EKORG'])),
-    lastSync: normalizeSapText_(pickField_(row, ['lastSync', 'lastUpdated', 'syncAt', 'LastSync'])) || nowIso_(),
-    notes: normalizeSapText_(pickField_(row, ['notes', 'observation', 'comment', 'Notes']))
+    lastSync: normalizeSapText_(pickField_(row, ['lastSync', 'lastUpdated', 'syncAt', 'LastSync'])) || nowIso_()
   };
 }
 
