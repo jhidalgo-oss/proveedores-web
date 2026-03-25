@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Rombo -->
+  <rect x="8" y="8" width="48" height="48" transform="rotate(45 32 32)" fill="#0B5D2A"></rect>
+
+  <!-- S gruesa -->
+  <path d="M42 20
+           C42 16, 22 16, 22 26
+           C22 32, 42 30, 42 40
+           C42 48, 22 48, 22 42" fill="none" stroke="white" stroke-width="8" stroke-linecap="round"></path>
+</svg>
