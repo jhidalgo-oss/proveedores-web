@@ -1,0 +1,6 @@
+name = "proveedores-proveedor"
+compatibility_date = "2026-03-24"
+pages_build_output_dir = "./public"
+
+[vars]
+APPS_SCRIPT_PROVIDER_API_URL = "https://script.google.com/macros/s/AKfycbyvppyJJ0grbQwp29YATDuu5bgj8WI7V22nVAi-JzYd9yh0bLexFnQyQrTr61PdXsf_/exec"

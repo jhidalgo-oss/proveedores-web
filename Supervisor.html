@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <base target="_top">
+    <?!= include('Styles'); ?>
+    <?!= include('Brand'); ?>
+  </head>
+  <body>
+    <script>
+      const BOOT = <?!= bootData ?>;
+      let accessKey = '';
+    </script>
+
+    <div class="shell">
+      <div class="brand-bar">
+        <div class="brand-lockup">
+          <img class="brand-mark" data-brand-logo alt="Grupo Santis">
+          <div class="brand-copy">
+            <small>Panel supervisor</small>
+            <strong>Control operativo de agenda</strong>
+          </div>
+        </div>
+        <div class="pillset">
+          <span class="pill">Aprobacion manual</span>
+          <span class="pill">Reasignacion rapida</span>
+          <span class="pill">Excepciones fuera de horario</span>
+        </div>
+      </div>
+
+      <header class="hero">
+        <section class="hero-main">
+          <div class="hero-content">
+            <span class="hero-kicker">Freddy y supervision</span>
+            <h1>Agenda visible, aprobaciones claras y huecos controlados</h1>
+            <p class="hero-copy">Desde aqui se valida el proveedor, se aprueban o reasignan citas y se liberan excepciones coordinadas fuera del horario regular sin perder trazabilidad.</p>
+            <div class="hero-metrics">
+              <div class="hero-metric">
+                <span class="mini-label">Proveedor</span>
+                <strong>Alta + filtro</strong>
+                <span>Valida contra SAP si cargas padron</span>
+              </div>
+              <div class="hero-metric">
+                <span class="mini-label">Agenda</span>
+                <strong>Vista continua</strong>
+                <span>Estado blanco, gris y verde</span>
+              </div>
+              <div class="hero-metric">
+                <span class="mini-label">Confirmacion</span>
+                <strong>Correo final</strong>
+                <span>Ingreso presentado en Vigilandia</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <aside class="hero-side">
+          <div class="mini-panel">
+            <p class="eyebrow">Resumen</p>
+            <p class="lead">Aprueba altas, aprueba horarios, reasigna en segundos y crea citas manuales cuando la operacion lo requiera.</p>
+          </div>
+          <div>
+            <p class="eyebrow">Leyenda</p>
+            <div class="legend">
+              <span class="legend-item"><span class="chip chip-approved"></span>Aprobado</span>
+              <span class="legend-item"><span class="chip chip-pending"></span>Pendiente</span>
+              <span class="legend-item"><span class="chip chip-available"></span>Disponible</span>
+            </div>
+          </div>
+        </aside>
+      </header>
+
+      <div id="message" class="message hidden"></div>
+
+      <section class="grid two">
+        <article class="card">
+          <h2>Acceso</h2>
+          <p class="muted">Si configuraste la propiedad <code>SUPERVISOR_ACCESS_KEY</code>, ingresala aqui para habilitar el panel.</p>
+          <div class="inline">
+            <input id="accessKey" type="password" placeholder="Clave supervisor">
+            <button id="loadDashboard" class="button primary" type="button">Cargar panel</button>
+          </div>
+        </article>
+
+        <article class="card">
+          <h2>Cita manual</h2>
+          <form id="manualAppointmentForm" class="stack">
+            <label>Codigo proveedor
+              <input name="vendorCode" inputmode="numeric" required>
+            </label>
+            <label>Correo proveedor
+              <input name="email" type="email" required>
+            </label>
+            <label>Fecha y hora
+              <input name="startIso" type="datetime-local" required>
+            </label>
+            <label>OC
+              <input name="ocNumber" inputmode="numeric" placeholder="Solo numeros">
+            </label>
+            <label>Observaciones
+              <textarea name="notes" rows="3"></textarea>
+            </label>
+            <label class="checkline">
+              <input name="allowOutsideSchedule" type="checkbox">
+              Permitir fuera de horario habitual
+            </label>
+            <button type="submit" class="button">Crear cita aprobada</button>
+          </form>
+        </article>
+      </section>
+
+      <section class="grid two">
+        <article class="card">
+          <div class="section-header">
+            <h2>Proveedores pendientes</h2>
+            <span id="providersCount" class="pill">0</span>
+          </div>
+          <div id="providersPending"></div>
+        </article>
+
+        <article class="card">
+          <div class="section-header">
+            <h2>Citas pendientes</h2>
+            <span id="appointmentsCount" class="pill">0</span>
+          </div>
+          <div id="appointmentsPending"></div>
+        </article>
+      </section>
+
+      <section class="card">
+        <h2>Calendario operativo</h2>
+        <div id="calendar" class="calendar"></div>
+      </section>
+
+      <section class="card">
+        <h2>Citas aprobadas recientes</h2>
+        <div id="approvedAppointments"></div>
+      </section>
+
+      <div class="footer-note">
+        Esta interfaz ya usa una base visual reutilizable para una futura migracion a Cloudflare sin depender de rutas de imagen locales.
+      </div>
+    </div>
+
+    <script>
+      applyBrand();
+      document.getElementById('loadDashboard').addEventListener('click', loadDashboard);
+      document.getElementById('manualAppointmentForm').addEventListener('submit', submitManualAppointment);
+
+      function loadDashboard() {
+        accessKey = document.getElementById('accessKey').value;
+        runServer('getSupervisorDashboard', {
+          accessKey: accessKey,
+          startDate: BOOT.today
+        }, renderDashboard);
+      }
+
+      function submitManualAppointment(event) {
+        event.preventDefault();
+        const data = formToObject(event.target);
+        data.accessKey = accessKey || document.getElementById('accessKey').value;
+        data.allowOutsideSchedule = Boolean(data.allowOutsideSchedule);
+
+        runServer('createManualAppointment', data, function(response) {
+          showMessage(response.message, 'success');
+          event.target.reset();
+          loadDashboard();
+        });
+      }
+
+      function renderDashboard(data) {
+        renderPendingProviders(data.pendingProviders || []);
+        renderPendingAppointments(data.pendingAppointments || []);
+        renderApprovedAppointments(data.approvedAppointments || []);
+        renderCalendar(data.calendar || { days: [] });
+        showMessage('Panel actualizado.', 'success');
+      }
+
+      function renderPendingProviders(items) {
+        document.getElementById('providersCount').textContent = String(items.length);
+        const wrapper = document.getElementById('providersPending');
+        if (!items.length) {
+          wrapper.innerHTML = '<p class="muted">No hay proveedores pendientes.</p>';
+          return;
+        }
+
+        wrapper.innerHTML = items.map(function(item) {
+          return `
+            <article class="list-card">
+              <strong>${escapeHtml(item.vendorName)}</strong>
+              <p>Codigo: ${escapeHtml(item.vendorCode)} | Correo: ${escapeHtml(item.email)}</p>
+              <p>RUC: ${escapeHtml(item.taxId || '')} | SAP: ${escapeHtml(item.sapStatus || '')}</p>
+              <div class="inline">
+                <button class="button primary" type="button" onclick="approveProviderAction('${item.providerId}')">Aprobar</button>
+                <button class="button" type="button" onclick="rejectProviderAction('${item.providerId}')">Rechazar</button>
+              </div>
+            </article>
+          `;
+        }).join('');
+      }
+
+      function renderPendingAppointments(items) {
+        document.getElementById('appointmentsCount').textContent = String(items.length);
+        const wrapper = document.getElementById('appointmentsPending');
+        if (!items.length) {
+          wrapper.innerHTML = '<p class="muted">No hay citas pendientes.</p>';
+          return;
+        }
+
+        wrapper.innerHTML = items.map(function(item) {
+          return `
+            <article class="list-card">
+              <strong>${escapeHtml(item.vendorName)}</strong>
+              <p>${escapeHtml(item.slotDate)} | ${escapeHtml(item.slotLabel)} | ${escapeHtml(item.email)}</p>
+              <p>OC: ${escapeHtml(item.ocNumber || '')}</p>
+              <div class="inline">
+                <button class="button primary" type="button" onclick="approveAppointmentAction('${item.appointmentId}')">Aprobar</button>
+                <button class="button" type="button" onclick="reassignAppointmentAction('${item.appointmentId}', '${item.effectiveStart}')">Reasignar</button>
+                <button class="button subtle" type="button" onclick="rejectAppointmentAction('${item.appointmentId}')">Rechazar</button>
+              </div>
+            </article>
+          `;
+        }).join('');
+      }
+
+      function renderApprovedAppointments(items) {
+        const wrapper = document.getElementById('approvedAppointments');
+        if (!items.length) {
+          wrapper.innerHTML = '<p class="muted">Todavia no hay citas aprobadas.</p>';
+          return;
+        }
+
+        const rows = items.map(function(item) {
+          return `
+            <tr>
+              <td>${escapeHtml(item.vendorName)}</td>
+              <td>${escapeHtml(item.slotDate)}</td>
+              <td>${escapeHtml(item.slotLabel)}</td>
+              <td>${escapeHtml(item.outsideSchedule === 'SI' ? 'Si' : 'No')}</td>
+            </tr>
+          `;
+        }).join('');
+
+        wrapper.innerHTML = `
+          <table>
+            <thead>
+              <tr><th>Proveedor</th><th>Fecha</th><th>Hora</th><th>Fuera horario</th></tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+        `;
+      }
+
+      function renderCalendar(calendar) {
+        const wrapper = document.getElementById('calendar');
+        wrapper.innerHTML = '';
+
+        calendar.days.forEach(function(day) {
+          const card = document.createElement('article');
+          card.className = 'day-card';
+          card.innerHTML = `
+            <div class="day-head">
+              <h3>${escapeHtml(day.weekday)}</h3>
+              <p>${escapeHtml(day.date)}</p>
+            </div>
+          `;
+
+          const slots = document.createElement('div');
+          slots.className = 'slots';
+
+          if (!day.slots.length) {
+            const empty = document.createElement('p');
+            empty.className = 'muted';
+            empty.textContent = 'Sin horario base';
+            slots.appendChild(empty);
+          } else {
+            day.slots.forEach(function(slot) {
+              const node = document.createElement('div');
+              node.className = `slot slot-${slot.status.toLowerCase()} admin-slot`;
+              node.innerHTML = `
+                <strong>${escapeHtml(slot.label)}</strong>
+                <span>${escapeHtml(slot.vendorName || 'Disponible')}</span>
+                ${slot.outsideSchedule ? '<small>Fuera de horario</small>' : ''}
+              `;
+              slots.appendChild(node);
+            });
+          }
+
+          card.appendChild(slots);
+          wrapper.appendChild(card);
+        });
+      }
+
+      function approveProviderAction(providerId) {
+        const notes = prompt('Observacion opcional para aprobar el proveedor:', '') || '';
+        runServer('approveProvider', { providerId: providerId, accessKey: accessKey, notes: notes }, function(response) {
+          showMessage(response.message, 'success');
+          loadDashboard();
+        });
+      }
+
+      function rejectProviderAction(providerId) {
+        const notes = prompt('Motivo de rechazo:', '');
+        if (notes === null) {
+          return;
+        }
+        runServer('rejectProvider', { providerId: providerId, accessKey: accessKey, notes: notes }, function(response) {
+          showMessage(response.message, 'success');
+          loadDashboard();
+        });
+      }
+
+      function approveAppointmentAction(appointmentId) {
+        const notes = prompt('Observacion opcional para la aprobacion:', '') || '';
+        runServer('approveAppointment', { appointmentId: appointmentId, accessKey: accessKey, notes: notes }, function(response) {
+          showMessage(response.message, 'success');
+          loadDashboard();
+        });
+      }
+
+      function rejectAppointmentAction(appointmentId) {
+        const notes = prompt('Motivo de rechazo:', '');
+        if (notes === null) {
+          return;
+        }
+        runServer('rejectAppointment', { appointmentId: appointmentId, accessKey: accessKey, notes: notes }, function(response) {
+          showMessage(response.message, 'success');
+          loadDashboard();
+        });
+      }
+
+      function reassignAppointmentAction(appointmentId, currentStart) {
+        const startIso = prompt('Nueva fecha y hora en formato YYYY-MM-DDTHH:MM', currentStart ? currentStart.slice(0, 16) : '');
+        if (!startIso) {
+          return;
+        }
+        const allowOutsideSchedule = confirm('Aceptar fuera del horario habitual si corresponde?');
+        const notes = prompt('Observacion de reasignacion:', '') || '';
+
+        runServer('rescheduleAppointment', {
+          appointmentId: appointmentId,
+          accessKey: accessKey,
+          startIso: startIso,
+          allowOutsideSchedule: allowOutsideSchedule,
+          approveAfter: true,
+          notes: notes
+        }, function(response) {
+          showMessage(response.message, 'success');
+          loadDashboard();
+        });
+      }
+
+      function runServer(method, payload, onSuccess) {
+        google.script.run
+          .withSuccessHandler(onSuccess)
+          .withFailureHandler(function(error) {
+            showMessage(error.message || 'Ocurrio un error.', 'error');
+          })[method](payload);
+      }
+
+      function formToObject(form) {
+        const data = new FormData(form);
+        const result = Object.fromEntries(data.entries());
+        result.allowOutsideSchedule = data.get('allowOutsideSchedule') === 'on';
+        return result;
+      }
+
+      function showMessage(text, type) {
+        const box = document.getElementById('message');
+        box.textContent = text;
+        box.className = `message ${type}`;
+      }
+
+      function applyBrand() {
+        if (!window.APP_BRAND) {
+          return;
+        }
+        document.querySelectorAll('[data-brand-logo]').forEach(function(node) {
+          node.src = window.APP_BRAND.logoSrc;
+        });
+      }
+
+      function escapeHtml(value) {
+        return String(value || '')
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#39;');
+      }
+    </script>
+  </body>
+</html>
