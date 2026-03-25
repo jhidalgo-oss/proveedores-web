@@ -174,12 +174,13 @@
 
                 <form id="registerForm" class="stack dense">
                   <label>Raz&oacute;n social
-                    <input name="vendorName" required>
+                    <input name="vendorName" required readonly>
                   </label>
                   <label>RUC o documento
-                    <input name="taxId" inputmode="numeric">
+                    <input name="taxId" inputmode="numeric" required>
                   </label>
-                  <label>Contacto
+                  <div id="registerLookupStatus" class="helper-text"></div>
+                  <label>Nombre y Apellidos persona de contacto
                     <input name="contactName">
                   </label>
                   <label>Correo obligatorio

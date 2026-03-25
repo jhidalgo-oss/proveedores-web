@@ -31,6 +31,8 @@ function wireEvents() {
   document.getElementById("logoutButton").addEventListener("click", logout);
   document.getElementById("appointmentOc").addEventListener("change", renderSelectedPurchaseOrderSummary);
   document.getElementById("appointmentOcSearch").addEventListener("input", renderPendingPurchaseOrders);
+  document.querySelector('#registerForm input[name="taxId"]').addEventListener("blur", lookupRegistrationVendor);
+  document.querySelector('#registerForm input[name="taxId"]').addEventListener("input", resetRegistrationLookupState);
   document.getElementById("forgotPasswordToggle").addEventListener("click", function () {
     togglePanel("passwordRecoveryPanel");
   });
@@ -75,6 +77,43 @@ async function submitRegistration(event) {
   } catch (error) {
     showMessage(error.message || "No pudimos completar tu registro en este momento. Intenta nuevamente en unos minutos.", "error");
   }
+}
+
+async function lookupRegistrationVendor() {
+  const form = document.getElementById("registerForm");
+  const taxIdInput = form.querySelector('input[name="taxId"]');
+  const vendorNameInput = form.querySelector('input[name="vendorName"]');
+  const status = document.getElementById("registerLookupStatus");
+  const digits = String(taxIdInput.value || "").replace(/\D/g, "");
+
+  if (!digits) {
+    vendorNameInput.value = "";
+    status.textContent = "";
+    return;
+  }
+
+  status.textContent = "Validando RUC...";
+
+  try {
+    const response = await api("lookupRegistrationByTaxId", { taxId: digits });
+    if (!response.found) {
+      vendorNameInput.value = "";
+      status.textContent = response.message || "No encontramos OCs abiertas para ese RUC.";
+      return;
+    }
+
+    vendorNameInput.value = response.vendorName || "";
+    status.textContent = "Razón social encontrada. OCs abiertas: " + String(response.openOrders || 0) + ".";
+  } catch (error) {
+    vendorNameInput.value = "";
+    status.textContent = error.message || "No pudimos validar el RUC en este momento.";
+  }
+}
+
+function resetRegistrationLookupState() {
+  const form = document.getElementById("registerForm");
+  form.querySelector('input[name="vendorName"]').value = "";
+  document.getElementById("registerLookupStatus").textContent = "";
 }
 
 async function submitLogin(event) {
@@ -495,11 +534,11 @@ async function api(action, payload) {
   try {
     data = JSON.parse(text);
   } catch (error) {
-    throw new Error("No pudimos completar la operaci\u00f3n en este momento. Intenta nuevamente en unos minutos.");
+    throw new Error(defaultActionError(action));
   }
 
   if (!response.ok || !data.ok) {
-    throw new Error(normalizeUserError(data.error));
+    throw new Error(normalizeUserError(data.error, action));
   }
 
   return data.data;
@@ -530,11 +569,11 @@ function activateTab(panelId) {
   });
 }
 
-function normalizeUserError(message) {
+function normalizeUserError(message, action) {
   const value = String(message || "").toLowerCase();
 
   if (!value) {
-    return "No se pudo completar la operaci\u00f3n. Intenta nuevamente en unos minutos.";
+    return defaultActionError(action);
   }
 
   if (
@@ -544,10 +583,27 @@ function normalizeUserError(message) {
     value.indexOf("web app") >= 0 ||
     value.indexOf("upstream") >= 0
   ) {
-    return "No pudimos cargar la disponibilidad en este momento. Intenta nuevamente en unos minutos.";
+    return defaultActionError(action);
   }
 
   return message;
+}
+
+function defaultActionError(action) {
+  switch (action) {
+    case "providerBootstrap":
+    case "providerDashboard":
+      return "No pudimos cargar la disponibilidad en este momento. Intenta nuevamente en unos minutos.";
+    case "registerProvider":
+    case "lookupRegistrationByTaxId":
+      return "No pudimos validar tu registro en este momento. Intenta nuevamente en unos minutos.";
+    case "providerLogin":
+      return "No pudimos iniciar sesión en este momento. Intenta nuevamente en unos minutos.";
+    case "requestAppointment":
+      return "No pudimos registrar tu solicitud en este momento. Intenta nuevamente en unos minutos.";
+    default:
+      return "No se pudo completar la operación. Intenta nuevamente en unos minutos.";
+  }
 }
 
 function resetProviderView() {

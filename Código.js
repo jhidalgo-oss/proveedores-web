@@ -302,6 +302,8 @@ function routeApiAction_(action, payload) {
       return providerLogin(payload);
     case 'providerDashboard':
       return getProviderDashboard(payload);
+    case 'lookupRegistrationByTaxId':
+      return lookupRegistrationByTaxId(payload);
     case 'registerProvider':
       return registerProvider(payload);
     case 'requestPasswordReset':
@@ -2205,6 +2207,33 @@ function createAuthenticatedProviderResponse_(provider, startDate) {
     sessionToken: session.token,
     sessionExpiresAt: session.expiresAt,
     dashboard: buildProviderDashboardResponse_(provider, startDate || formatDate_(new Date()))
+  };
+}
+
+function lookupRegistrationByTaxId(payload) {
+  ensureSheets_();
+  payload = payload || {};
+  var taxId = digitsOnly_(payload.taxId);
+  if (!taxId) {
+    throw new Error('Ingresa un RUC valido.');
+  }
+
+  var eligibleOpenOrders = getEligibleOpenOrdersForRegistration_(taxId, '');
+  if (!eligibleOpenOrders.length) {
+    return {
+      found: false,
+      vendorName: '',
+      openOrders: 0,
+      message: 'No tiene OCs abiertas en este momento. Cuando exista una OC pendiente podra registrarse.'
+    };
+  }
+
+  return {
+    found: true,
+    vendorName: eligibleOpenOrders[0].vendorName || '',
+    sapVendorCode: eligibleOpenOrders[0].vendorCode || '',
+    openOrders: eligibleOpenOrders.length,
+    message: 'Proveedor encontrado con OCs abiertas.'
   };
 }
 
