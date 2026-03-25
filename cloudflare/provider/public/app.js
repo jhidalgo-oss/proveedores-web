@@ -11,6 +11,11 @@ document.addEventListener("DOMContentLoaded", async function () {
 });
 
 function wireEvents() {
+  document.querySelectorAll("[data-tab-target]").forEach(function (button) {
+    button.addEventListener("click", function () {
+      activateTab(button.getAttribute("data-tab-target"));
+    });
+  });
   document.getElementById("registerForm").addEventListener("submit", submitRegistration);
   document.getElementById("lookupForm").addEventListener("submit", submitLookup);
   document.getElementById("refreshCalendar").addEventListener("click", refreshDashboard);
@@ -41,6 +46,7 @@ async function submitRegistration(event) {
       '<p>Guarda este c\u00f3digo. Lo usar\u00e1s junto con tu correo para volver a ingresar.</p>'
     ].join("");
 
+    activateTab("loginPanel");
     document.getElementById("lookupForm").vendorCode.value = response.provider.vendorCode;
     document.getElementById("lookupForm").email.value = response.provider.email;
     await lookupProvider(response.provider.vendorCode, response.provider.email);
@@ -51,6 +57,7 @@ async function submitRegistration(event) {
 
 async function submitLookup(event) {
   event.preventDefault();
+  activateTab("loginPanel");
   await lookupProvider(event.target.vendorCode.value, event.target.email.value);
 }
 
@@ -85,6 +92,7 @@ function renderDashboard(data) {
     return;
   }
 
+  activateTab("loginPanel");
   providerState = data.provider;
   appointmentsState = data.appointments || [];
 
@@ -309,6 +317,20 @@ function showMessage(text, type) {
   const box = document.getElementById("message");
   box.textContent = text;
   box.className = "message " + type;
+}
+
+function activateTab(panelId) {
+  document.querySelectorAll("[data-tab-target]").forEach(function (button) {
+    const isActive = button.getAttribute("data-tab-target") === panelId;
+    button.classList.toggle("is-active", isActive);
+    button.setAttribute("aria-selected", isActive ? "true" : "false");
+  });
+
+  document.querySelectorAll("[data-tab-panel]").forEach(function (panel) {
+    const isActive = panel.id === panelId;
+    panel.classList.toggle("is-active", isActive);
+    panel.hidden = !isActive;
+  });
 }
 
 function normalizeUserError(message) {
