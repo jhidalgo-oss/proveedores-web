@@ -81,7 +81,6 @@ body::before {
 }
 
 .brand-lockup,
-.topbar-note,
 .story-panel,
 .access-shell,
 .dashboard-card,
@@ -136,19 +135,11 @@ body::before {
   line-height: 1.55;
 }
 
-.topbar-note {
-  padding: var(--space-2) var(--space-3);
-  background: var(--surface-muted);
-  color: var(--muted);
-  font-size: 15px;
-  line-height: 1.55;
-}
-
 .stage {
   display: grid;
   grid-template-columns: repeat(12, minmax(0, 1fr));
   gap: var(--space-4);
-  align-items: start;
+  align-items: stretch;
 }
 
 .story-panel {
@@ -201,10 +192,10 @@ h3,
 }
 
 h1 {
-  max-width: 8ch;
+  max-width: 10ch;
   margin: var(--space-2) 0;
-  font-size: 56px;
-  line-height: 0.94;
+  font-size: 52px;
+  line-height: 0.98;
   letter-spacing: -0.05em;
 }
 
@@ -320,9 +311,14 @@ h3 {
 
 .access-column {
   grid-column: span 5;
+  display: flex;
 }
 
 .access-shell {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-height: 708px;
   padding: var(--space-4);
   background: var(--surface-strong);
 }
@@ -370,9 +366,11 @@ h3 {
 
 .tab-panels {
   display: grid;
+  flex: 1;
 }
 
 .tab-panel {
+  height: 100%;
   border: 1px solid var(--line-soft);
   border-radius: var(--card-radius);
   background: rgba(255, 255, 255, 0.54);
@@ -813,6 +811,10 @@ th {
     min-height: auto;
   }
 
+  .access-shell {
+    min-height: auto;
+  }
+
   .calendar-layout {
     grid-template-columns: 1fr;
   }
@@ -870,8 +872,8 @@ th {
   }
 
   h1 {
-    max-width: 10ch;
-    font-size: 42px;
+    max-width: 12ch;
+    font-size: 40px;
   }
 
   h2 {

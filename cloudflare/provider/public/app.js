@@ -26,7 +26,7 @@ async function loadBootstrap() {
   try {
     boot = await api("providerBootstrap", {});
   } catch (error) {
-    showMessage(error.message || "No pudimos cargar la plataforma en este momento. Intenta nuevamente en unos minutos.", "error");
+    console.warn(error);
   }
 }
 
