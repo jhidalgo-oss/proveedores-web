@@ -99,7 +99,7 @@ body::before {
 }
 
 .brand-mark {
-  width: 174px;
+  width: 192px;
   max-width: 24vw;
   height: auto;
   display: block;
@@ -887,7 +887,7 @@ th {
   }
 
   .brand-mark {
-    width: 150px;
+    width: 165px;
     max-width: 34vw;
   }
 
@@ -954,7 +954,7 @@ th {
   }
 
   .brand-mark {
-    width: 136px;
+    width: 150px;
     max-width: 50vw;
   }
 

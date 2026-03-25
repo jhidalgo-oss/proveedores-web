@@ -8,7 +8,6 @@ var APP_DEFAULTS = {
   sheets: {
     providers: 'PROVEEDORES',
     appointments: 'CITAS',
-    sap: 'SAP_PROVEEDORES',
     sapOpenOrders: 'SAP_OC_PENDIENTES',
     audit: 'AUDITORIA',
     config: 'CONFIG'
@@ -91,13 +90,6 @@ SHEET_HEADERS[APP_DEFAULTS.sheets.appointments] = [
   'mailSentAt',
   'notes'
 ];
-SHEET_HEADERS[APP_DEFAULTS.sheets.sap] = [
-  'vendorCode',
-  'vendorName',
-  'taxId',
-  'active',
-  'lastSync'
-];
 SHEET_HEADERS[APP_DEFAULTS.sheets.sapOpenOrders] = [
   'poNumber',
   'poItem',
@@ -137,7 +129,7 @@ function doGet(e) {
   template.bootData = JSON.stringify(getBootstrapData_(mode));
   return template
     .evaluate()
-    .setTitle(mode === 'supervisor' ? 'Panel Supervisor Proveedores' : 'Citas de Atencion a Proveedores')
+    .setTitle(mode === 'supervisor' ? 'Panel Supervisor Proveedores' : 'Portal de Proveedores | Grupo Santis')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
 }
@@ -250,9 +242,6 @@ function getSapSyncStatus() {
     config: {
       syncEnabled: config.syncEnabled,
       syncIntervalHours: config.syncIntervalHours,
-      providerSourceUrl: config.providerSourceUrl,
-      providerSourceFormat: config.providerSourceFormat,
-      providerArrayPath: config.providerArrayPath,
       openOrdersSourceUrl: config.openOrdersSourceUrl,
       openOrdersSourceFormat: config.openOrdersSourceFormat,
       openOrdersArrayPath: config.openOrdersArrayPath,
@@ -280,12 +269,8 @@ function applyConfigSheetToScriptProperties() {
     SLOT_MINUTES: true,
     MAX_ADVANCE_DAYS: true,
     LOOKAHEAD_DAYS: true,
-    STRICT_SAP_VALIDATION: true,
     SAP_SYNC_ENABLED: true,
     SAP_SYNC_INTERVAL_HOURS: true,
-    SAP_PROVIDER_SOURCE_URL: true,
-    SAP_PROVIDER_SOURCE_FORMAT: true,
-    SAP_PROVIDER_ARRAY_PATH: true,
     SAP_OPEN_ORDERS_SOURCE_URL: true,
     SAP_OPEN_ORDERS_SOURCE_FORMAT: true,
     SAP_OPEN_ORDERS_ARRAY_PATH: true,
@@ -365,7 +350,6 @@ function getProviderDashboard(criteria) {
 
 function registerProvider(payload) {
   ensureSheets_();
-  var config = getRuntimeConfig_();
   var clean = normalizeProviderPayload_(payload);
   var providers = getSheetData_(APP_DEFAULTS.sheets.providers);
   var existing = providers.find(function(row) {
@@ -373,11 +357,6 @@ function registerProvider(payload) {
     return sameText_(row.email, clean.email) || sameTaxId;
   });
   var sapResult = validateVendorAgainstSap_(clean.sapVendorCode, clean.taxId);
-
-  if (config.strictSapValidation && sapResult.catalogLoaded && !sapResult.matched) {
-    throw new Error('El proveedor no existe en el padrón SAP. Verifica los datos antes de continuar.');
-  }
-
   var now = nowIso_();
   var record = existing || {};
   record.providerId = record.providerId || nextId_('PRV');
@@ -497,7 +476,7 @@ function getSupervisorDashboard(options) {
       .map(cleanRow_),
     calendar: buildCalendar_(startDate, getRuntimeConfig_().lookaheadDays, true),
     stats: {
-      sapCatalogLoaded: hasSapCatalog_(),
+      openOrdersLoaded: hasSapOpenOrders_(),
       providersPending: providers.filter(function(row) { return row.registrationStatus === PROVIDER_STATUS.PENDING; }).length,
       appointmentsPending: appointments.filter(function(row) { return row.appointmentStatus === APPOINTMENT_STATUS.PENDING; }).length
     }
@@ -726,8 +705,6 @@ function getBootstrapData_(mode) {
       maxAdvanceDays: config.maxAdvanceDays,
       lookaheadDays: config.lookaheadDays,
       supervisorName: config.supervisorName,
-      strictSapValidation: config.strictSapValidation,
-      hasSapCatalog: hasSapCatalog_(),
       hasSapOpenOrders: hasSapOpenOrders_(),
       supervisorProtected: isSupervisorProtected_()
     }
@@ -741,8 +718,7 @@ function getRuntimeConfig_() {
     supervisorName: props.getProperty('SUPERVISOR_NAME') || APP_DEFAULTS.supervisorName,
     slotMinutes: Number(props.getProperty('SLOT_MINUTES') || APP_DEFAULTS.slotMinutes),
     maxAdvanceDays: Number(props.getProperty('MAX_ADVANCE_DAYS') || APP_DEFAULTS.maxAdvanceDays),
-    lookaheadDays: Number(props.getProperty('LOOKAHEAD_DAYS') || APP_DEFAULTS.lookaheadDays),
-    strictSapValidation: stringToBoolean_(props.getProperty('STRICT_SAP_VALIDATION'))
+    lookaheadDays: Number(props.getProperty('LOOKAHEAD_DAYS') || APP_DEFAULTS.lookaheadDays)
   };
 }
 
@@ -763,9 +739,6 @@ function getSapSyncConfig_() {
   return {
     syncEnabled: props.getProperty('SAP_SYNC_ENABLED') !== 'FALSE',
     syncIntervalHours: Math.max(1, Number(props.getProperty('SAP_SYNC_INTERVAL_HOURS') || 3)),
-    providerSourceUrl: String(props.getProperty('SAP_PROVIDER_SOURCE_URL') || '').trim(),
-    providerSourceFormat: normalizeSapSourceFormat_(props.getProperty('SAP_PROVIDER_SOURCE_FORMAT') || 'JSON'),
-    providerArrayPath: String(props.getProperty('SAP_PROVIDER_ARRAY_PATH') || '').trim(),
     openOrdersSourceUrl: String(props.getProperty('SAP_OPEN_ORDERS_SOURCE_URL') || '').trim(),
     openOrdersSourceFormat: normalizeSapSourceFormat_(props.getProperty('SAP_OPEN_ORDERS_SOURCE_FORMAT') || 'JSON'),
     openOrdersArrayPath: String(props.getProperty('SAP_OPEN_ORDERS_ARRAY_PATH') || '').trim(),
@@ -777,6 +750,10 @@ function getSapSyncConfig_() {
 
 function ensureSheets_() {
   var spreadsheet = getSpreadsheet_();
+  var legacySapSheet = spreadsheet.getSheetByName('SAP_PROVEEDORES');
+  if (legacySapSheet) {
+    spreadsheet.deleteSheet(legacySapSheet);
+  }
   Object.keys(SHEET_HEADERS).forEach(function(sheetName) {
     var sheet = spreadsheet.getSheetByName(sheetName);
     if (!sheet) {
@@ -838,14 +815,9 @@ function getDefaultConfigRows_() {
     ['SLOT_MINUTES', String(config.slotMinutes), 'Duracion de la cita en minutos'],
     ['MAX_ADVANCE_DAYS', String(config.maxAdvanceDays), 'Cuantos dias hacia adelante se permiten'],
     ['LOOKAHEAD_DAYS', String(config.lookaheadDays), 'Cuantos dias muestra el calendario'],
-    ['STRICT_SAP_VALIDATION', config.strictSapValidation ? 'TRUE' : 'FALSE', 'Bloquea proveedores no encontrados en SAP'],
-    ['SAP_REQUIRED_FIELDS', 'vendorCode,vendorName,taxId,active,lastSync', 'Campos minimos esperados del padron SAP'],
     ['SAP_OPEN_ORDERS_FIELDS', 'poNumber,poItem,vendorCode,vendorName,taxId,deliveryDate,buyerName,itemGroupName,materialCode,materialDescription,storageLocation,orderedQty,deliveredQty,openQty,uom,status,lastSync', 'Campos minimos esperados para OCs pendientes'],
     ['SAP_SYNC_ENABLED', sapSync.syncEnabled ? 'TRUE' : 'FALSE', 'Habilita la sincronizacion automatica desde una fuente SAP o middleware'],
     ['SAP_SYNC_INTERVAL_HOURS', String(sapSync.syncIntervalHours), 'Frecuencia del trigger automatico en horas'],
-    ['SAP_PROVIDER_SOURCE_URL', sapSync.providerSourceUrl, 'Endpoint HTTPS para proveedores SAP en JSON o CSV'],
-    ['SAP_PROVIDER_SOURCE_FORMAT', sapSync.providerSourceFormat, 'Formato de la fuente de proveedores: JSON o CSV'],
-    ['SAP_PROVIDER_ARRAY_PATH', sapSync.providerArrayPath, 'Ruta opcional al arreglo de proveedores, por ejemplo d.results o value'],
     ['SAP_OPEN_ORDERS_SOURCE_URL', sapSync.openOrdersSourceUrl, 'Endpoint HTTPS para OCs pendientes en JSON o CSV'],
     ['SAP_OPEN_ORDERS_SOURCE_FORMAT', sapSync.openOrdersSourceFormat, 'Formato de la fuente de OCs pendientes: JSON o CSV'],
     ['SAP_OPEN_ORDERS_ARRAY_PATH', sapSync.openOrdersArrayPath, 'Ruta opcional al arreglo de OCs, por ejemplo d.results o value'],
@@ -1065,38 +1037,13 @@ function generateSlotsForDate_(date) {
 }
 
 function validateVendorAgainstSap_(vendorCode, taxId) {
-  var catalog = getSheetData_(APP_DEFAULTS.sheets.sap);
-  if (!catalog.length) {
-    return {
-      catalogLoaded: false,
-      matched: false,
-      status: 'SIN_PADRON',
-      vendorName: ''
-    };
-  }
-
-  var vendorDigits = digitsOnly_(vendorCode);
-  var taxDigits = digitsOnly_(taxId);
-  var match = catalog.find(function(row) {
-    var codeMatch = vendorDigits && digitsOnly_(row.vendorCode) === vendorDigits;
-    var taxMatch = taxDigits && digitsOnly_(row.taxId) === taxDigits;
-    return codeMatch || taxMatch;
-  });
-
-  if (!match) {
-    return {
-      catalogLoaded: true,
-      matched: false,
-      status: 'NO_ENCONTRADO',
-      vendorName: ''
-    };
-  }
-
   return {
-    catalogLoaded: true,
-    matched: true,
-    status: 'VALIDADO',
-    vendorName: match.vendorName || ''
+    catalogLoaded: false,
+    matched: false,
+    status: 'NO_APLICA',
+    vendorName: '',
+    sapVendorCode: '',
+    active: false
   };
 }
 
@@ -1221,17 +1168,13 @@ function syncSapDataNow_() {
       ok: true,
       skipped: true,
       message: 'La sincronizacion SAP esta desactivada en Script Properties.',
-      providers: { status: 'SKIPPED', written: 0 },
+      providers: { status: 'REMOVED', written: 0 },
       openOrders: { status: 'SKIPPED', written: 0 },
       executedAt: nowIso_()
     };
   }
 
-  var providersResult = executeSapSyncStep_(
-    Boolean(config.providerSourceUrl),
-    syncSapProviders_,
-    'SAP_PROVIDER_SOURCE_URL no configurado.'
-  );
+  var providersResult = { status: 'REMOVED', written: 0 };
   var openOrdersResult = executeSapSyncStep_(
     Boolean(config.openOrdersSourceUrl),
     syncSapOpenOrders_,
@@ -1247,7 +1190,7 @@ function syncSapDataNow_() {
 
   return {
     ok: errors.length === 0,
-    skipped: providersResult.status === 'SKIPPED' && openOrdersResult.status === 'SKIPPED',
+    skipped: openOrdersResult.status === 'SKIPPED',
     message: errors.length ? errors.join(' | ') : 'Sincronizacion SAP completada.',
     providers: providersResult,
     openOrders: openOrdersResult,
@@ -1272,32 +1215,6 @@ function executeSapSyncStep_(shouldRun, handler, skippedReason) {
       error: String(error && error.message || error)
     };
   }
-}
-
-function syncSapProviders_() {
-  var config = getSapSyncConfig_();
-  var sourceRows = fetchSapSourceRows_(
-    config.providerSourceUrl,
-    config.providerSourceFormat,
-    config.providerArrayPath,
-    'proveedores SAP'
-  );
-  var rows = sourceRows.map(function(row) {
-    return mapSapProviderRecord_(row);
-  }).filter(function(row) {
-    return row.vendorCode || row.taxId || row.vendorName;
-  });
-
-  if (!rows.length) {
-    throw new Error('La fuente de proveedores SAP devolvio 0 registros validos. Se cancelo la actualizacion para evitar vaciar el padron.');
-  }
-
-  replaceSheetContents_(APP_DEFAULTS.sheets.sap, rows);
-  return {
-    status: 'UPDATED',
-    written: rows.length,
-    source: config.providerSourceUrl
-  };
 }
 
 function syncSapOpenOrders_() {
@@ -1432,17 +1349,6 @@ function parseCsvRows_(text) {
   });
 }
 
-function mapSapProviderRecord_(row) {
-  var now = nowIso_();
-  return {
-    vendorCode: normalizeSapText_(pickField_(row, ['vendorCode', 'supplierCode', 'vendor', 'code', 'lifnr', 'VendorCode', 'LIFNR'])),
-    vendorName: normalizeSapText_(pickField_(row, ['vendorName', 'supplierName', 'name', 'name1', 'companyName', 'VendorName', 'NAME1'])),
-    taxId: digitsOnly_(pickField_(row, ['taxId', 'ruc', 'taxNumber', 'vatNumber', 'stcd1', 'RUC', 'STCD1'])),
-    active: normalizeSapActiveValue_(pickField_(row, ['active', 'status', 'isActive', 'Active', 'STATUS'])),
-    lastSync: normalizeSapText_(pickField_(row, ['lastSync', 'lastUpdated', 'syncAt', 'LastSync'])) || now
-  };
-}
-
 function mapSapOpenOrderRecord_(row) {
   var orderedQty = normalizeSapNumber_(pickField_(row, ['orderedQty', 'quantity', 'menge', 'OrderedQty', 'MENGE']));
   var receivedQty = normalizeSapNumber_(pickField_(row, ['receivedQty', 'goodsReceivedQty', 'wemng', 'ReceivedQty', 'WEMNG']));
@@ -1499,17 +1405,6 @@ function normalizeSapBoolean_(value) {
     return 'FALSE';
   }
   return ['TRUE', 'SI', 'YES', 'X', '1', 'BLOQUEADO', 'BLOCKED'].indexOf(text) >= 0 ? 'TRUE' : 'FALSE';
-}
-
-function normalizeSapActiveValue_(value) {
-  var text = String(value || '').trim().toUpperCase();
-  if (!text) {
-    return 'TRUE';
-  }
-  if (['FALSE', 'NO', '0', 'INACTIVO', 'INACTIVE', 'BLOCKED', 'BLOQUEADO'].indexOf(text) >= 0) {
-    return 'FALSE';
-  }
-  return 'TRUE';
 }
 
 function normalizeSapDate_(value) {
@@ -1610,10 +1505,6 @@ function audit_(eventType, recordId, actor, details) {
     actor: actor,
     details: details
   }, 'recordId');
-}
-
-function hasSapCatalog_() {
-  return getSheetData_(APP_DEFAULTS.sheets.sap).length > 0;
 }
 
 function hasSapOpenOrders_() {
@@ -2452,32 +2343,13 @@ function normalizeAppointmentRequest_(payload) {
 }
 
 function validateVendorAgainstSap_(vendorCode, taxId) {
-  var catalog = getSheetData_(APP_DEFAULTS.sheets.sap);
-  var vendorDigits = digitsOnly_(vendorCode);
-  var taxDigits = digitsOnly_(taxId);
-  var match = catalog.find(function(row) {
-    var codeMatch = vendorDigits && digitsOnly_(row.vendorCode) === vendorDigits;
-    var taxMatch = taxDigits && digitsOnly_(row.taxId) === taxDigits;
-    return codeMatch || taxMatch;
-  });
-  if (!match) {
-    return {
-      catalogLoaded: catalog.length > 0,
-      matched: false,
-      status: catalog.length ? 'NO_ENCONTRADO' : 'SIN_PADRON',
-      vendorName: '',
-      sapVendorCode: '',
-      active: false
-    };
-  }
-  var isActive = !String(match.active || '').trim() || String(match.active).toUpperCase() === 'TRUE' || String(match.active).toUpperCase() === 'ACTIVO';
   return {
-    catalogLoaded: true,
-    matched: true,
-    status: isActive ? 'VALIDADO' : 'INACTIVO',
-    vendorName: match.vendorName || '',
-    sapVendorCode: String(match.vendorCode || '').trim(),
-    active: isActive
+    catalogLoaded: false,
+    matched: false,
+    status: 'NO_APLICA',
+    vendorName: '',
+    sapVendorCode: '',
+    active: false
   };
 }
 
