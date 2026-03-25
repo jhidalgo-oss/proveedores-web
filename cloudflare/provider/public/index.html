@@ -3,142 +3,177 @@
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Atención de Proveedores | Grupo Santis</title>
+    <title>Atenci&oacute;n de Proveedores | Grupo Santis</title>
     <link rel="stylesheet" href="./styles.css">
   </head>
   <body>
-    <div class="shell">
-      <div class="brand-bar">
+    <div class="page-shell">
+      <header class="topbar">
         <div class="brand-lockup">
           <img class="brand-mark" src="./logo-santis.png" alt="Grupo Santis">
           <div class="brand-copy">
-            <strong>Atención de proveedores</strong>
+            <span class="brand-kicker">PORTAL DE PROVEEDORES</span>
+            <strong>Atenci&oacute;n de proveedores</strong>
           </div>
         </div>
-      </div>
+        <div class="topbar-note">
+          Solicita tu cita, revisa tu historial y descarga tu constancia desde un solo lugar.
+        </div>
+      </header>
 
-      <header class="hero">
-        <section class="hero-main">
-          <div class="hero-content">
-            <span class="hero-kicker">PORTAL DE PROVEEDORES</span>
+      <main class="stage">
+        <section class="story-panel">
+          <div class="story-head">
+            <span class="eyebrow">ATENCI&Oacute;N DIGITAL</span>
             <h1>Solicita tu cita y mejora tu experiencia</h1>
-            <div class="hero-flow">
-              <p>1. El proveedor se registra.</p>
-              <p>2. Solicita su cita. (Grupo Santis valida y autoriza)</p>
-              <p>3. Descarga tu cita en esta web o en el correo registrado.</p>
-            </div>
-            <div class="hero-metrics">
-              <div class="hero-metric">
-                <span class="mini-label">Lunes a miércoles</span>
-                <strong>08:00 - 16:00</strong>
-                <span>Atención regular</span>
+            <p class="story-copy">
+              Dise&ntilde;ado para que el registro, la solicitud y la validaci&oacute;n de citas se sientan claros, ordenados y profesionales desde el primer ingreso.
+            </p>
+          </div>
+
+          <ol class="story-steps">
+            <li>
+              <span class="step-index">01</span>
+              <div>
+                <strong>El proveedor se registra.</strong>
+                <p>El sistema genera un c&oacute;digo corto para futuros ingresos.</p>
               </div>
-              <div class="hero-metric">
-                <span class="mini-label">Jueves y viernes</span>
-                <strong>08:00 - 12:30</strong>
-                <span>Citas cada 30 minutos</span>
+            </li>
+            <li>
+              <span class="step-index">02</span>
+              <div>
+                <strong>Solicita su cita.</strong>
+                <p>Grupo Santis valida y autoriza la atenci&oacute;n seg&uacute;n disponibilidad.</p>
               </div>
-              <div class="hero-metric">
-                <span class="mini-label">Confirmación</span>
-                <strong>Correo registrado</strong>
-                <span>Y descarga desde esta web</span>
+            </li>
+            <li>
+              <span class="step-index">03</span>
+              <div>
+                <strong>Descarga tu constancia.</strong>
+                <p>Disponible en esta web y tambi&eacute;n en el correo registrado.</p>
               </div>
-            </div>
+            </li>
+          </ol>
+
+          <div class="schedule-band">
+            <article class="schedule-card">
+              <span class="mini-label">Lunes a mi&eacute;rcoles</span>
+              <strong>08:00 - 16:00</strong>
+              <small>Atenci&oacute;n regular</small>
+            </article>
+            <article class="schedule-card">
+              <span class="mini-label">Jueves y viernes</span>
+              <strong>08:00 - 12:30</strong>
+              <small>Citas cada 30 minutos</small>
+            </article>
+            <article class="schedule-card">
+              <span class="mini-label">Confirmaci&oacute;n</span>
+              <strong>Correo y descarga</strong>
+              <small>Constancia digital disponible</small>
+            </article>
           </div>
         </section>
 
-        <aside class="hero-side">
-          <div>
-            <p class="eyebrow">Estados del calendario</p>
-            <div class="legend">
-              <span class="legend-item"><span class="chip chip-approved"></span>Aprobado</span>
-              <span class="legend-item"><span class="chip chip-pending"></span>Pendiente de aprobación</span>
-              <span class="legend-item"><span class="chip chip-available"></span>Disponible</span>
+        <aside class="access-column">
+          <article class="login-card">
+            <div class="card-head">
+              <span class="eyebrow">ACCESO PRINCIPAL</span>
+              <h2>Inicia sesi&oacute;n</h2>
+              <p class="muted">Si ya est&aacute;s registrado, entra con tu c&oacute;digo de proveedor y tu correo para ver tu hist&oacute;rico y pedir una nueva cita.</p>
             </div>
-          </div>
-          <div class="mini-panel">
-            <p class="eyebrow">Ingreso</p>
-            <p class="lead">Si ya estás registrado, inicia sesión con tu código de proveedor y tu correo para ver tu histórico y pedir una nueva cita.</p>
-          </div>
+
+            <form id="lookupForm" class="stack">
+              <label>C&oacute;digo de proveedor
+                <input name="vendorCode" required>
+              </label>
+              <label>Correo registrado
+                <input name="email" type="email" required>
+              </label>
+              <button type="submit" class="button primary wide">Ingresar</button>
+            </form>
+
+            <div id="providerSummary" class="summary hidden"></div>
+            <div id="generatedCodeBox" class="summary hidden"></div>
+            <div id="warnings" class="stack"></div>
+          </article>
+
+          <article class="register-card">
+            <div class="card-head">
+              <span class="eyebrow">REGISTRO</span>
+              <h2>Registra tu empresa</h2>
+              <p class="muted">Tu c&oacute;digo se genera autom&aacute;ticamente. Solo necesitas completar tus datos y el correo de contacto.</p>
+            </div>
+
+            <form id="registerForm" class="stack dense">
+              <label>Raz&oacute;n social
+                <input name="vendorName" required>
+              </label>
+              <label>RUC o documento
+                <input name="taxId" inputmode="numeric">
+              </label>
+              <label>Contacto
+                <input name="contactName">
+              </label>
+              <label>Correo obligatorio
+                <input name="email" type="email" required>
+              </label>
+              <label>Tel&eacute;fono
+                <input name="phone">
+              </label>
+              <label>Observaciones
+                <textarea name="notes" rows="3"></textarea>
+              </label>
+              <button type="submit" class="button secondary wide">Registrarme</button>
+            </form>
+          </article>
         </aside>
-      </header>
+      </main>
+
+      <section class="legend-strip">
+        <span class="legend-title">Estado del calendario</span>
+        <span class="legend-chip"><span class="chip chip-approved"></span>Aprobado</span>
+        <span class="legend-chip"><span class="chip chip-pending"></span>Pendiente de aprobaci&oacute;n</span>
+        <span class="legend-chip"><span class="chip chip-available"></span>Disponible</span>
+      </section>
 
       <div id="message" class="message hidden"></div>
 
-      <section class="grid two">
-        <article class="card">
-          <h2>1. Registro del proveedor</h2>
-          <p class="muted">Tu código de proveedor se genera automáticamente después del registro.</p>
-          <form id="registerForm" class="stack">
-            <label>Razón social
-              <input name="vendorName" required>
-            </label>
-            <label>RUC o documento
-              <input name="taxId" inputmode="numeric">
-            </label>
-            <label>Contacto
-              <input name="contactName">
-            </label>
-            <label>Correo obligatorio
-              <input name="email" type="email" required>
-            </label>
-            <label>Teléfono
-              <input name="phone">
-            </label>
-            <label>Observaciones
-              <textarea name="notes" rows="3"></textarea>
-            </label>
-            <button type="submit" class="button primary">Registrarme</button>
-          </form>
-        </article>
-
-        <article class="card">
-          <h2>2. Inicia sesión</h2>
-          <p class="muted">Consulta tu estado, revisa tu histórico de citas y solicita una nueva cuando tengas autorización.</p>
-          <form id="lookupForm" class="stack">
-            <label>Código de proveedor
-              <input name="vendorCode" required>
-            </label>
-            <label>Correo registrado
-              <input name="email" type="email" required>
-            </label>
-            <button type="submit" class="button">Ingresar</button>
-          </form>
-
-          <div id="providerSummary" class="summary hidden"></div>
-          <div id="generatedCodeBox" class="summary hidden"></div>
-          <div id="warnings" class="stack"></div>
-        </article>
-      </section>
-
-      <section id="appointmentPanel" class="card hidden">
-        <div class="section-header">
+      <section id="appointmentPanel" class="dashboard-card hidden">
+        <div class="section-head">
           <div>
-            <h2>3. Solicita una nueva cita</h2>
-            <p class="muted">Horarios normales: lunes a miércoles 08:00-16:00, jueves y viernes 08:00-12:30.</p>
+            <span class="eyebrow">NUEVA CITA</span>
+            <h2>Solicita una nueva cita</h2>
+            <p class="muted">Horarios regulares: lunes a mi&eacute;rcoles de 08:00 a 16:00 y jueves a viernes de 08:00 a 12:30.</p>
           </div>
-          <button id="refreshCalendar" class="button subtle" type="button">Actualizar</button>
+          <button id="refreshCalendar" class="button ghost" type="button">Actualizar</button>
         </div>
 
-        <div id="calendar" class="calendar"></div>
-
-        <div class="request-box">
-          <div>
-            <strong>Cita seleccionada:</strong>
-            <span id="selectedSlotLabel">Ninguna</span>
-          </div>
-          <label>OC opcional
-            <input id="appointmentOc" inputmode="numeric" placeholder="Solo números">
-          </label>
-          <label>Notas
-            <textarea id="appointmentNotes" rows="3" placeholder="Detalle de visita, carga, descarga, etc."></textarea>
-          </label>
-          <button id="requestAppointmentButton" class="button primary" type="button">Solicitar cita</button>
+        <div class="calendar-layout">
+          <div id="calendar" class="calendar"></div>
+          <aside class="request-box">
+            <div class="request-head">
+              <span class="eyebrow">RESUMEN</span>
+              <h3>Cita seleccionada</h3>
+              <p id="selectedSlotLabel">Ninguna</p>
+            </div>
+            <label>OC opcional
+              <input id="appointmentOc" inputmode="numeric" placeholder="Solo n&uacute;meros">
+            </label>
+            <label>Notas
+              <textarea id="appointmentNotes" rows="4" placeholder="Detalle de visita, carga, descarga o informaci&oacute;n adicional."></textarea>
+            </label>
+            <button id="requestAppointmentButton" class="button primary wide" type="button">Solicitar cita</button>
+          </aside>
         </div>
       </section>
 
-      <section id="appointmentsHistory" class="card hidden">
-        <h2>Mi histórico de citas</h2>
+      <section id="appointmentsHistory" class="dashboard-card hidden">
+        <div class="section-head">
+          <div>
+            <span class="eyebrow">HISTORIAL</span>
+            <h2>Mis citas</h2>
+          </div>
+        </div>
         <div id="appointmentsTable"></div>
       </section>
     </div>

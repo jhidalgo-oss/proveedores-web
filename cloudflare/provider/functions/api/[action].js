@@ -37,6 +37,19 @@ export async function onRequest(context) {
   });
 
   const text = await upstreamResponse.text();
+  const contentType = upstreamResponse.headers.get("content-type") || "";
+
+  if (!contentType.includes("application/json")) {
+    return json({
+      ok: false,
+      error: "El backend de Apps Script no est\u00e1 devolviendo JSON. Revisa que el Web App est\u00e9 publicado para acceso p\u00fablico.",
+      debug: {
+        action,
+        upstreamStatus: upstreamResponse.status
+      }
+    }, 502);
+  }
+
   return new Response(text, {
     status: upstreamResponse.ok ? 200 : 502,
     headers: {

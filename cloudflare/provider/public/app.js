@@ -21,7 +21,7 @@ async function loadBootstrap() {
   try {
     boot = await api("providerBootstrap", {});
   } catch (error) {
-    showMessage(error.message || "No se pudo inicializar la página.", "error");
+    showMessage(error.message || "No se pudo inicializar la p\u00e1gina.", "error");
   }
 }
 
@@ -35,11 +35,11 @@ async function submitRegistration(event) {
 
     const generatedCodeBox = document.getElementById("generatedCodeBox");
     generatedCodeBox.classList.remove("hidden");
-    generatedCodeBox.innerHTML = `
-      <p class="eyebrow">Código generado</p>
-      <p><strong>${escapeHtml(response.provider.vendorCode)}</strong></p>
-      <p>Guarda este código. Lo usarás junto con tu correo para iniciar sesión.</p>
-    `;
+    generatedCodeBox.innerHTML = [
+      '<p class="eyebrow">C\u00d3DIGO GENERADO</p>',
+      '<p><strong>' + escapeHtml(response.provider.vendorCode) + '</strong></p>',
+      '<p>Guarda este c\u00f3digo. Lo usar\u00e1s junto con tu correo para volver a ingresar.</p>'
+    ].join("");
 
     document.getElementById("lookupForm").vendorCode.value = response.provider.vendorCode;
     document.getElementById("lookupForm").email.value = response.provider.email;
@@ -90,11 +90,11 @@ function renderDashboard(data) {
 
   const summary = document.getElementById("providerSummary");
   summary.classList.remove("hidden");
-  summary.innerHTML = `
-    <div class="status status-${data.provider.registrationStatus.toLowerCase()}">${escapeHtml(data.provider.registrationStatus)}</div>
-    <p><strong>${escapeHtml(data.provider.vendorName)}</strong></p>
-    <p>Código de proveedor: ${escapeHtml(data.provider.vendorCode)} | Correo: ${escapeHtml(data.provider.email)}</p>
-  `;
+  summary.innerHTML = [
+    '<div class="status status-' + data.provider.registrationStatus.toLowerCase() + '">' + escapeHtml(data.provider.registrationStatus) + "</div>",
+    "<p><strong>" + escapeHtml(data.provider.vendorName) + "</strong></p>",
+    "<p>C\u00f3digo de proveedor: " + escapeHtml(data.provider.vendorCode) + " | Correo: " + escapeHtml(data.provider.email) + "</p>"
+  ].join("");
 
   const warnings = document.getElementById("warnings");
   warnings.innerHTML = "";
@@ -123,12 +123,12 @@ function renderCalendar(calendar) {
   calendar.days.forEach(function (day) {
     const card = document.createElement("article");
     card.className = "day-card";
-    card.innerHTML = `
-      <div class="day-head">
-        <h3>${escapeHtml(day.weekday)}</h3>
-        <p>${escapeHtml(day.date)}</p>
-      </div>
-    `;
+    card.innerHTML = [
+      '<div class="day-head">',
+      "<h3>" + escapeHtml(day.weekday) + "</h3>",
+      "<p>" + escapeHtml(day.date) + "</p>",
+      "</div>"
+    ].join("");
 
     const slots = document.createElement("div");
     slots.className = "slots";
@@ -136,18 +136,18 @@ function renderCalendar(calendar) {
     if (!day.slots.length) {
       const empty = document.createElement("p");
       empty.className = "muted";
-      empty.textContent = "Sin atención ese día";
+      empty.textContent = "Sin atenci\u00f3n ese d\u00eda";
       slots.appendChild(empty);
     } else {
       day.slots.forEach(function (slot) {
         const button = document.createElement("button");
         button.type = "button";
-        button.className = `slot slot-${slot.status.toLowerCase()}`;
+        button.className = "slot slot-" + slot.status.toLowerCase();
         button.disabled = !slot.isSelectable;
-        button.innerHTML = `<span>${escapeHtml(slot.label)}</span>`;
+        button.innerHTML = "<span>" + escapeHtml(slot.label) + "</span>";
         button.addEventListener("click", function () {
           selectedSlot = slot;
-          document.getElementById("selectedSlotLabel").textContent = `${slot.startIso} (${slot.label})`;
+          document.getElementById("selectedSlotLabel").textContent = slot.startIso + " (" + slot.label + ")";
           document.querySelectorAll(".slot.selected").forEach(function (node) {
             node.classList.remove("selected");
           });
@@ -168,39 +168,37 @@ function renderAppointments(appointments) {
   section.classList.remove("hidden");
 
   if (!appointments.length) {
-    wrapper.innerHTML = '<p class="muted">Aún no tienes citas registradas.</p>';
+    wrapper.innerHTML = '<p class="muted">A\u00fan no tienes citas registradas.</p>';
     return;
   }
 
   const rows = appointments.map(function (item) {
     const downloadButton = item.appointmentStatus === "APROBADA"
-      ? `<button class="button subtle table-action" type="button" onclick="downloadAppointment('${escapeHtml(item.appointmentId)}')">Descargar</button>`
+      ? '<button class="button subtle table-action" type="button" onclick="downloadAppointment(\'' + escapeAttribute(item.appointmentId) + '\')">Descargar</button>'
       : "";
 
-    return `
-      <tr>
-        <td>${escapeHtml(item.slotDate)}</td>
-        <td>${escapeHtml(item.slotLabel)}</td>
-        <td>${escapeHtml(item.appointmentStatus)}</td>
-        <td>${escapeHtml(item.ocNumber || "")}</td>
-        <td>${downloadButton}</td>
-      </tr>
-    `;
+    return [
+      "<tr>",
+      "<td>" + escapeHtml(item.slotDate) + "</td>",
+      "<td>" + escapeHtml(item.slotLabel) + "</td>",
+      "<td>" + escapeHtml(item.appointmentStatus) + "</td>",
+      "<td>" + escapeHtml(item.ocNumber || "") + "</td>",
+      "<td>" + downloadButton + "</td>",
+      "</tr>"
+    ].join("");
   }).join("");
 
-  wrapper.innerHTML = `
-    <table>
-      <thead>
-        <tr><th>Fecha</th><th>Hora</th><th>Estado</th><th>OC</th><th>Acción</th></tr>
-      </thead>
-      <tbody>${rows}</tbody>
-    </table>
-  `;
+  wrapper.innerHTML = [
+    "<table>",
+    "<thead><tr><th>Fecha</th><th>Hora</th><th>Estado</th><th>OC</th><th>Acci\u00f3n</th></tr></thead>",
+    "<tbody>" + rows + "</tbody>",
+    "</table>"
+  ].join("");
 }
 
 async function requestAppointment() {
   if (!providerState) {
-    showMessage("Primero inicia sesión con tu código y correo.", "error");
+    showMessage("Primero inicia sesi\u00f3n con tu c\u00f3digo y correo.", "error");
     return;
   }
   if (!selectedSlot) {
@@ -230,47 +228,47 @@ function downloadAppointment(appointmentId) {
   });
 
   if (!appointment) {
-    showMessage("No se encontró la cita para descargar.", "error");
+    showMessage("No se encontr\u00f3 la cita para descargar.", "error");
     return;
   }
 
-  const content = `
-    <!DOCTYPE html>
-    <html lang="es">
-      <head>
-        <meta charset="UTF-8">
-        <title>Cita de proveedor</title>
-        <style>
-          body { font-family: Georgia, serif; padding: 32px; color: #1f1a14; }
-          .ticket { max-width: 720px; margin: 0 auto; border: 1px solid #d8ccb6; border-radius: 20px; padding: 28px; }
-          h1 { margin-top: 0; }
-          table { width: 100%; border-collapse: collapse; }
-          td { padding: 10px 0; border-bottom: 1px solid #eee4d3; vertical-align: top; }
-        </style>
-      </head>
-      <body>
-        <div class="ticket">
-          <h1>Constancia de cita</h1>
-          <p>Atención de proveedores - Grupo Santis</p>
-          <table>
-            <tr><td><strong>Proveedor</strong></td><td>${escapeHtml(appointment.vendorName || providerState.vendorName)}</td></tr>
-            <tr><td><strong>Código de proveedor</strong></td><td>${escapeHtml(appointment.vendorCode || providerState.vendorCode)}</td></tr>
-            <tr><td><strong>Fecha</strong></td><td>${escapeHtml(appointment.slotDate)}</td></tr>
-            <tr><td><strong>Hora</strong></td><td>${escapeHtml(appointment.slotLabel)}</td></tr>
-            <tr><td><strong>Estado</strong></td><td>${escapeHtml(appointment.appointmentStatus)}</td></tr>
-            <tr><td><strong>OC</strong></td><td>${escapeHtml(appointment.ocNumber || "No registrada")}</td></tr>
-            <tr><td><strong>Código de acceso</strong></td><td>${escapeHtml(appointment.accessCode || "Se enviará por correo")}</td></tr>
-          </table>
-        </div>
-      </body>
-    </html>
-  `;
+  const content = [
+    "<!DOCTYPE html>",
+    '<html lang="es">',
+    "<head>",
+    '<meta charset="UTF-8">',
+    "<title>Cita de proveedor</title>",
+    "<style>",
+    "body{font-family:Manrope,Arial,sans-serif;padding:32px;color:#1f1a14;background:#f5efe4;}",
+    ".ticket{max-width:760px;margin:0 auto;border:1px solid #d8ccb6;border-radius:24px;padding:32px;background:#fffdf8;}",
+    "h1{font-family:Georgia,serif;margin-top:0;font-size:38px;}",
+    "table{width:100%;border-collapse:collapse;}",
+    "td{padding:12px 0;border-bottom:1px solid #eee4d3;vertical-align:top;}",
+    "</style>",
+    "</head>",
+    "<body>",
+    '<div class="ticket">',
+    "<h1>Constancia de cita</h1>",
+    "<p>Atenci\u00f3n de proveedores - Grupo Santis</p>",
+    "<table>",
+    "<tr><td><strong>Proveedor</strong></td><td>" + escapeHtml(appointment.vendorName || providerState.vendorName) + "</td></tr>",
+    "<tr><td><strong>C\u00f3digo de proveedor</strong></td><td>" + escapeHtml(appointment.vendorCode || providerState.vendorCode) + "</td></tr>",
+    "<tr><td><strong>Fecha</strong></td><td>" + escapeHtml(appointment.slotDate) + "</td></tr>",
+    "<tr><td><strong>Hora</strong></td><td>" + escapeHtml(appointment.slotLabel) + "</td></tr>",
+    "<tr><td><strong>Estado</strong></td><td>" + escapeHtml(appointment.appointmentStatus) + "</td></tr>",
+    "<tr><td><strong>OC</strong></td><td>" + escapeHtml(appointment.ocNumber || "No registrada") + "</td></tr>",
+    "<tr><td><strong>C\u00f3digo de acceso</strong></td><td>" + escapeHtml(appointment.accessCode || "Revisa tu correo registrado") + "</td></tr>",
+    "</table>",
+    "</div>",
+    "</body>",
+    "</html>"
+  ].join("");
 
   const blob = new Blob([content], { type: "text/html;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = `cita-${appointment.slotDate || "proveedor"}.html`;
+  link.download = "cita-" + (appointment.slotDate || "proveedor") + ".html";
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
@@ -278,7 +276,7 @@ function downloadAppointment(appointmentId) {
 }
 
 async function api(action, payload) {
-  const response = await fetch(`${API_BASE}/${action}`, {
+  const response = await fetch(API_BASE + "/" + action, {
     method: "POST",
     headers: {
       "content-type": "application/json"
@@ -286,10 +284,19 @@ async function api(action, payload) {
     body: JSON.stringify(payload || {})
   });
 
-  const data = await response.json();
-  if (!response.ok || !data.ok) {
-    throw new Error(data.error || "No se pudo completar la operación.");
+  const text = await response.text();
+  let data;
+
+  try {
+    data = JSON.parse(text);
+  } catch (error) {
+    throw new Error("El servicio no respondi\u00f3 correctamente. Verifica la publicaci\u00f3n del backend de Apps Script.");
   }
+
+  if (!response.ok || !data.ok) {
+    throw new Error(data.error || "No se pudo completar la operaci\u00f3n.");
+  }
+
   return data.data;
 }
 
@@ -301,13 +308,14 @@ function formToObject(form) {
 function showMessage(text, type) {
   const box = document.getElementById("message");
   box.textContent = text;
-  box.className = `message ${type}`;
+  box.className = "message " + type;
 }
 
 function resetProviderView() {
   providerState = null;
   appointmentsState = [];
   document.getElementById("providerSummary").classList.add("hidden");
+  document.getElementById("generatedCodeBox").classList.add("hidden");
   document.getElementById("appointmentPanel").classList.add("hidden");
   document.getElementById("appointmentsHistory").classList.add("hidden");
   document.getElementById("warnings").innerHTML = "";
@@ -320,4 +328,10 @@ function escapeHtml(value) {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
+}
+
+function escapeAttribute(value) {
+  return String(value || "")
+    .replace(/\\/g, "\\\\")
+    .replace(/'/g, "\\'");
 }
