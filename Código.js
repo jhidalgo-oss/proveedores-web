@@ -9,6 +9,7 @@ var APP_DEFAULTS = {
     providers: 'PROVEEDORES',
     appointments: 'CITAS',
     sap: 'SAP_PROVEEDORES',
+    sapOpenOrders: 'SAP_OC_PENDIENTES',
     audit: 'AUDITORIA',
     config: 'CONFIG'
   }
@@ -86,7 +87,35 @@ SHEET_HEADERS[APP_DEFAULTS.sheets.sap] = [
   'vendorCode',
   'vendorName',
   'taxId',
+  'email',
+  'phone',
+  'companyCode',
+  'purchasingOrg',
+  'blockedForPurchasing',
   'active',
+  'lastSync',
+  'notes'
+];
+SHEET_HEADERS[APP_DEFAULTS.sheets.sapOpenOrders] = [
+  'poNumber',
+  'poItem',
+  'vendorCode',
+  'vendorName',
+  'taxId',
+  'documentDate',
+  'deliveryDate',
+  'materialCode',
+  'materialDescription',
+  'plant',
+  'storageLocation',
+  'orderedQty',
+  'receivedQty',
+  'openQty',
+  'uom',
+  'status',
+  'buyer',
+  'companyCode',
+  'purchasingOrg',
   'lastSync',
   'notes'
 ];
@@ -558,6 +587,7 @@ function getBootstrapData_(mode) {
       supervisorName: config.supervisorName,
       strictSapValidation: config.strictSapValidation,
       hasSapCatalog: hasSapCatalog_(),
+      hasSapOpenOrders: hasSapOpenOrders_(),
       supervisorProtected: isSupervisorProtected_()
     }
   };
@@ -608,7 +638,9 @@ function seedConfigSheet_(sheet) {
     ['SLOT_MINUTES', String(config.slotMinutes), 'Duracion de la cita en minutos'],
     ['MAX_ADVANCE_DAYS', String(config.maxAdvanceDays), 'Cuantos dias hacia adelante se permiten'],
     ['LOOKAHEAD_DAYS', String(config.lookaheadDays), 'Cuantos dias muestra el calendario'],
-    ['STRICT_SAP_VALIDATION', config.strictSapValidation ? 'TRUE' : 'FALSE', 'Bloquea proveedores no encontrados en SAP']
+    ['STRICT_SAP_VALIDATION', config.strictSapValidation ? 'TRUE' : 'FALSE', 'Bloquea proveedores no encontrados en SAP'],
+    ['SAP_REQUIRED_FIELDS', 'vendorCode,taxId,vendorName,active,lastSync', 'Campos minimos esperados del padron SAP'],
+    ['SAP_OPEN_ORDERS_FIELDS', 'poNumber,vendorCode,openQty,status,lastSync', 'Campos minimos esperados para OCs pendientes']
   ];
   sheet.getRange(2, 1, rows.length, rows[0].length).setValues(rows);
 }
@@ -1017,6 +1049,28 @@ function audit_(eventType, recordId, actor, details) {
 
 function hasSapCatalog_() {
   return getSheetData_(APP_DEFAULTS.sheets.sap).length > 0;
+}
+
+function hasSapOpenOrders_() {
+  return getSheetData_(APP_DEFAULTS.sheets.sapOpenOrders).length > 0;
+}
+
+function getPendingPurchaseOrdersForVendor_(vendorCode) {
+  var vendorDigits = digitsOnly_(vendorCode);
+  if (!vendorDigits) {
+    return [];
+  }
+
+  return getSheetData_(APP_DEFAULTS.sheets.sapOpenOrders)
+    .filter(function(row) {
+      var sameVendor = digitsOnly_(row.vendorCode) === vendorDigits;
+      var hasOpenQty = Number(row.openQty || 0) > 0;
+      var status = String(row.status || '').trim().toUpperCase();
+      var isOpenStatus = !status || status === 'ABIERTA' || status === 'OPEN' || status === 'PENDIENTE';
+      return sameVendor && hasOpenQty && isOpenStatus;
+    })
+    .sort(sortByDateField_('deliveryDate'))
+    .map(cleanRow_);
 }
 
 function getMode_(e) {
@@ -1456,6 +1510,7 @@ function buildProviderDashboardResponse_(provider, startDate) {
     found: true,
     provider: cleanRow_(provider),
     warnings: buildProviderWarnings_(provider),
+    pendingPurchaseOrders: getPendingPurchaseOrdersForVendor_(provider.vendorCode),
     appointments: getProviderAppointments_(provider.providerId),
     canRequestAppointments: provider.registrationStatus === PROVIDER_STATUS.APPROVED,
     calendar: provider.registrationStatus === PROVIDER_STATUS.APPROVED
