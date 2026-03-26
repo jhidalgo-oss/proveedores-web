@@ -1,4 +1,4 @@
-const DEFAULT_APPS_SCRIPT_PROVIDER_API_URL = "https://script.google.com/macros/s/AKfycbzZgByFj4psNEtt0qblF3ZBIAq7ajlJY6-yo2xcMgElwExswKMOlxexzsUzJeXADEpf/exec";
+const DEFAULT_APPS_SCRIPT_PROVIDER_API_URL = "https://script.google.com/macros/s/AKfycbxZwf76tEjgxQDdW1QBQHKdvIqp8ZUr-cMymbS-VsR8LVIog6sOeX39sgFE5qAW8gn8/exec";
 
 export async function onRequest(context) {
   const { request, env, params } = context;

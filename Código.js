@@ -1,5 +1,6 @@
 var APP_DEFAULTS = {
   spreadsheetId: '1NfEcup2dVetL-i9tHtA6G9jlO2cZjYdbyYnZiJv535M',
+  providerPortalUrl: 'https://proveedores-web.pages.dev',
   supervisorName: 'Freddy',
   slotMinutes: 30,
   maxAdvanceDays: 30,
@@ -125,11 +126,29 @@ SHEET_HEADERS[APP_DEFAULTS.sheets.config] = [
 function doGet(e) {
   ensureSheets_();
   var mode = getMode_(e);
-  var template = HtmlService.createTemplateFromFile(mode === 'supervisor' ? 'Supervisor' : 'Proveedor');
+  if (mode !== 'supervisor') {
+    var providerPortalUrl = getProviderPortalUrl_();
+    return HtmlService.createHtmlOutput(
+      '<!DOCTYPE html><html lang="es"><head>' +
+      '<meta charset="utf-8">' +
+      '<meta http-equiv="refresh" content="0; url=' + encodeURI(providerPortalUrl) + '">' +
+      '<meta name="viewport" content="width=device-width, initial-scale=1">' +
+      '<title>Portal de Proveedores | Grupo Santis</title>' +
+      '</head><body>' +
+      '<p>Redirigiendo al portal de proveedores...</p>' +
+      '<p>Si no eres redirigido, abre <a href="' + encodeURI(providerPortalUrl) + '">' + escapeHtml_(providerPortalUrl) + '</a>.</p>' +
+      '</body></html>'
+    )
+      .setTitle('Portal de Proveedores | Grupo Santis')
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
+      .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+  }
+
+  var template = HtmlService.createTemplateFromFile('Supervisor');
   template.bootData = JSON.stringify(getBootstrapData_(mode));
   return template
     .evaluate()
-    .setTitle(mode === 'supervisor' ? 'Panel Supervisor Proveedores' : 'Portal de Proveedores | Grupo Santis')
+    .setTitle('Panel Supervisor Proveedores')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
 }
@@ -323,128 +342,6 @@ function routeApiAction_(action, payload) {
     default:
       throw new Error('Accion API no soportada: ' + action);
   }
-}
-
-function getProviderDashboard(criteria) {
-  ensureSheets_();
-  criteria = criteria || {};
-  var provider = findProvider_(criteria);
-  if (!provider) {
-    return {
-      found: false,
-      message: 'No encontramos un proveedor con ese código y correo.'
-    };
-  }
-
-  var config = getRuntimeConfig_();
-  var startDate = criteria.startDate || formatDate_(new Date());
-  return {
-    found: true,
-    provider: cleanRow_(provider),
-    warnings: buildProviderWarnings_(provider),
-    appointments: getProviderAppointments_(provider.providerId),
-    canRequestAppointments: provider.registrationStatus === PROVIDER_STATUS.APPROVED,
-    calendar: provider.registrationStatus === PROVIDER_STATUS.APPROVED
-      ? buildCalendar_(startDate, config.lookaheadDays, false)
-      : null
-  };
-}
-
-function registerProvider(payload) {
-  ensureSheets_();
-  var clean = normalizeProviderPayload_(payload);
-  var providers = getSheetData_(APP_DEFAULTS.sheets.providers);
-  var existing = providers.find(function(row) {
-    var sameTaxId = clean.taxId && digitsOnly_(row.taxId) === clean.taxId;
-    return sameText_(row.email, clean.email) || sameTaxId;
-  });
-  var sapResult = validateVendorAgainstSap_(clean.sapVendorCode, clean.taxId);
-  var now = nowIso_();
-  var record = existing || {};
-  record.providerId = record.providerId || nextId_('PRV');
-  record.vendorCode = record.vendorCode || generateProviderCode_();
-  record.vendorName = sapResult.vendorName || clean.vendorName;
-  record.taxId = clean.taxId;
-  record.contactName = clean.contactName;
-  record.email = clean.email;
-  record.phone = clean.phone;
-  record.ocNumber = record.ocNumber || '';
-  record.sapStatus = sapResult.status;
-  record.createdAt = record.createdAt || now;
-  record.updatedAt = now;
-  record.notes = clean.notes;
-
-  if (record.registrationStatus !== PROVIDER_STATUS.APPROVED) {
-    record.registrationStatus = PROVIDER_STATUS.PENDING;
-    record.approvedBy = '';
-    record.approvedAt = '';
-  }
-
-  saveRecord_(APP_DEFAULTS.sheets.providers, record, 'providerId', existing && existing._rowNumber);
-  audit_('PROVEEDOR_REGISTRO', record.providerId, record.email, 'Proveedor registrado o actualizado');
-
-  return {
-    ok: true,
-    message: record.registrationStatus === PROVIDER_STATUS.APPROVED
-      ? 'Tus datos fueron actualizados. Tu código de proveedor es ' + record.vendorCode + '. Ya puedes solicitar una cita.'
-      : 'Registro enviado. Tu código de proveedor es ' + record.vendorCode + '. Grupo Santis validará y autorizará tu solicitud.',
-    provider: cleanRow_(record),
-    sap: sapResult
-  };
-}
-
-function requestAppointment(payload) {
-  ensureSheets_();
-  var clean = normalizeAppointmentRequest_(payload);
-  var provider = findProvider_({
-    providerId: clean.providerId,
-    vendorCode: clean.vendorCode,
-    email: clean.email
-  });
-
-  if (!provider) {
-    throw new Error('Primero registra al proveedor y confirma el correo usado.');
-  }
-  if (provider.registrationStatus !== PROVIDER_STATUS.APPROVED) {
-    throw new Error('El proveedor aún no está aprobado por Grupo Santis.');
-  }
-
-  var slotStart = parseLocalDateTime_(clean.startIso);
-  validateSlotRequest_(slotStart);
-  assertSlotAvailable_(clean.startIso, '');
-
-  var slotEnd = addMinutes_(slotStart, getRuntimeConfig_().slotMinutes);
-  var appointment = {
-    appointmentId: nextId_('CIT'),
-    providerId: provider.providerId,
-    vendorCode: provider.vendorCode,
-    vendorName: provider.vendorName,
-    email: provider.email,
-    ocNumber: clean.ocNumber || provider.ocNumber || '',
-    requestedStart: clean.startIso,
-    requestedEnd: formatDateTime_(slotEnd),
-    effectiveStart: clean.startIso,
-    effectiveEnd: formatDateTime_(slotEnd),
-    slotDate: formatDate_(slotStart),
-    slotLabel: formatSlotLabel_(slotStart, slotEnd),
-    appointmentStatus: APPOINTMENT_STATUS.PENDING,
-    outsideSchedule: 'NO',
-    requestedAt: nowIso_(),
-    approvedAt: '',
-    approvedBy: '',
-    accessCode: '',
-    mailSentAt: '',
-    notes: clean.notes
-  };
-
-  saveRecord_(APP_DEFAULTS.sheets.appointments, appointment, 'appointmentId');
-  audit_('CITA_SOLICITADA', appointment.appointmentId, provider.email, appointment.slotLabel);
-
-  return {
-    ok: true,
-    message: 'Tu solicitud de cita fue registrada y queda pendiente de aprobación.',
-    appointment: cleanRow_(appointment)
-  };
 }
 
 function getSupervisorDashboard(options) {
@@ -724,6 +621,11 @@ function getRuntimeConfig_() {
   };
 }
 
+function getProviderPortalUrl_() {
+  var value = String(PropertiesService.getScriptProperties().getProperty('PROVIDER_PORTAL_URL') || APP_DEFAULTS.providerPortalUrl).trim();
+  return value || APP_DEFAULTS.providerPortalUrl;
+}
+
 function getStorageLocationAreaMap_() {
   var raw = String(PropertiesService.getScriptProperties().getProperty('STORAGE_LOCATION_AREA_MAP_JSON') || '').trim();
   if (!raw) {
@@ -891,46 +793,12 @@ function getRecordById_(sheetName, idField, idValue) {
   });
 }
 
-function findProvider_(criteria) {
-  criteria = criteria || {};
-  var providers = getSheetData_(APP_DEFAULTS.sheets.providers);
-  return providers.find(function(row) {
-    if (criteria.providerId && sameText_(row.providerId, criteria.providerId)) {
-      return true;
-    }
-    if (criteria.vendorCode && criteria.email) {
-      return sameText_(row.vendorCode, criteria.vendorCode) && sameText_(row.email, criteria.email);
-    }
-    if (criteria.vendorCode) {
-      return sameText_(row.vendorCode, criteria.vendorCode);
-    }
-    if (criteria.email) {
-      return sameText_(row.email, criteria.email);
-    }
-    return false;
-  });
-}
-
 function getProviderAppointments_(providerId) {
   return getSheetData_(APP_DEFAULTS.sheets.appointments)
     .filter(function(row) { return sameText_(row.providerId, providerId); })
     .sort(sortByDateField_('effectiveStart'))
     .map(enrichAppointmentWithOpenOrderContext_)
     .map(cleanRow_);
-}
-
-function buildProviderWarnings_(provider) {
-  var warnings = [];
-  if (provider.sapStatus === 'SIN_PADRON') {
-    warnings.push('No hay un padrón SAP cargado aún. La validación se hará manualmente.');
-  }
-  if (provider.sapStatus === 'NO_ENCONTRADO') {
-    warnings.push('El proveedor no fue encontrado en SAP y debe revisarse manualmente.');
-  }
-  if (provider.registrationStatus === PROVIDER_STATUS.PENDING) {
-    warnings.push('Grupo Santis debe validar primero el alta del proveedor.');
-  }
-  return warnings;
 }
 
 function buildCalendar_(startDateText, days, includeDetails) {
@@ -1038,17 +906,6 @@ function generateSlotsForDate_(date) {
   return slots;
 }
 
-function validateVendorAgainstSap_(vendorCode, taxId) {
-  return {
-    catalogLoaded: false,
-    matched: false,
-    status: 'NO_APLICA',
-    vendorName: '',
-    sapVendorCode: '',
-    active: false
-  };
-}
-
 function validateSlotRequest_(dateTime) {
   var config = getRuntimeConfig_();
   if (!isWithinSchedule_(dateTime)) {
@@ -1088,79 +945,6 @@ function assertSlotAvailable_(startIso, currentAppointmentId) {
   if (occupied) {
     throw new Error('Ese horario ya no esta disponible.');
   }
-}
-
-function normalizeProviderPayload_(payload) {
-  payload = payload || {};
-  var email = String(payload.email || '').trim().toLowerCase();
-  var taxId = digitsOnly_(payload.taxId);
-  var sapVendorCode = digitsOnly_(payload.sapVendorCode || '');
-
-  if (!String(payload.vendorName || '').trim()) {
-    throw new Error('La razón social o nombre del proveedor es obligatoria.');
-  }
-  if (!email || !isValidEmail_(email)) {
-    throw new Error('Debes registrar un correo válido.');
-  }
-
-  return {
-    vendorName: String(payload.vendorName || '').trim(),
-    taxId: taxId,
-    sapVendorCode: sapVendorCode,
-    contactName: String(payload.contactName || '').trim(),
-    email: email,
-    phone: String(payload.phone || '').trim(),
-    notes: String(payload.notes || '').trim()
-  };
-}
-
-function normalizeAppointmentRequest_(payload) {
-  payload = payload || {};
-  var email = String(payload.email || '').trim().toLowerCase();
-  var vendorCode = digitsOnly_(payload.vendorCode);
-  var ocNumber = digitsOnly_(payload.ocNumber || '');
-  var startIso = String(payload.startIso || '').trim();
-
-  if (!vendorCode) {
-    throw new Error('Falta el codigo del proveedor.');
-  }
-  if (!email || !isValidEmail_(email)) {
-    throw new Error('Falta un correo valido.');
-  }
-  if (!startIso) {
-    throw new Error('Selecciona un horario.');
-  }
-  if (payload.ocNumber && !ocNumber) {
-    throw new Error('La OC solo debe contener numeros.');
-  }
-
-  return {
-    providerId: String(payload.providerId || '').trim(),
-    vendorCode: vendorCode,
-    email: email,
-    ocNumber: ocNumber,
-    startIso: trimToMinute_(startIso),
-    notes: String(payload.notes || '').trim()
-  };
-}
-
-function sendProviderApprovalEmail_(provider) {
-  if (!provider.email) {
-    return;
-  }
-  var subject = 'Proveedor aprobado para solicitar citas';
-  var body = [
-    '<p>Hola ' + escapeHtml_(provider.contactName || provider.vendorName) + ',</p>',
-    '<p>Tu registro fue aprobado por Grupo Santis.</p>',
-    '<p>Desde este momento ya puedes ingresar al portal del proveedor y solicitar una cita disponible.</p>',
-    '<p>Proveedor: <strong>' + escapeHtml_(provider.vendorName) + '</strong><br>',
-    'Código de proveedor: <strong>' + escapeHtml_(provider.vendorCode) + '</strong></p>'
-  ].join('');
-  MailApp.sendEmail({
-    to: provider.email,
-    subject: subject,
-    htmlBody: body
-  });
 }
 
 function syncSapDataNow_() {
@@ -1843,17 +1627,6 @@ function addDays_(date, days) {
 
 function addMinutes_(date, minutes) {
   return new Date(date.getTime() + minutes * 60000);
-}
-
-function cleanRow_(row) {
-  var copy = {};
-  Object.keys(row).forEach(function(key) {
-    if (key.indexOf('_') === 0) {
-      return;
-    }
-    copy[key] = row[key];
-  });
-  return copy;
 }
 
 function nextId_(prefix) {
