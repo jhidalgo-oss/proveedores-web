@@ -142,7 +142,7 @@ async function submitLogin(event) {
   showMessage("Validando tu acceso...", "loading");
 
   try {
-    const response = await api("providerLogin", payload);
+    const response = await api("providerAccess", payload);
     handleAuthenticatedResponse(response);
     if (hasRenderableDashboard(response.dashboard)) {
       showMessage("Ingreso correcto.", "success");
@@ -821,6 +821,9 @@ function normalizeUserError(message, action) {
 }
 
 function defaultActionError(action) {
+  if (action === "providerAccess") {
+    return "No pudimos iniciar sesión en este momento. Intenta nuevamente en unos minutos.";
+  }
   switch (action) {
     case "providerBootstrap":
     case "providerDashboard":

@@ -194,6 +194,40 @@ function setupSystem() {
   };
 }
 
+function debugProviderAccount(email) {
+  ensureSheets_();
+  var target = String(email || '').trim().toLowerCase();
+  if (!target) {
+    throw new Error('Email requerido.');
+  }
+  var providers = getSheetData_(APP_DEFAULTS.sheets.providers).filter(function(row) {
+    return sameText_(row.email, target);
+  });
+  return {
+    email: target,
+    count: providers.length,
+    rows: providers.map(function(row) {
+      return {
+        rowNumber: row._rowNumber,
+        providerId: row.providerId,
+        vendorCode: row.vendorCode,
+        sapVendorCode: row.sapVendorCode,
+        vendorName: row.vendorName,
+        email: row.email,
+        registrationStatus: row.registrationStatus,
+        sessionTokenHash: row.sessionTokenHash ? String(row.sessionTokenHash).slice(0, 16) : '',
+        sessionTokenExpiresAt: row.sessionTokenExpiresAt || '',
+        ocNumber: row.ocNumber || '',
+        updatedAt: row.updatedAt || ''
+      };
+    })
+  };
+}
+
+function debugJhidalgoProviderAccount() {
+  return debugProviderAccount('jhidalgo@gruposantis.pe');
+}
+
 function runSapSync() {
   ensureSheets_();
   var lock = LockService.getScriptLock();
@@ -326,6 +360,8 @@ function routeApiAction_(action, payload) {
       return getBootstrapData_('proveedor');
     case 'supervisorBootstrap':
       return getBootstrapData_('supervisor');
+    case 'providerAccess':
+      return providerAccess(payload);
     case 'providerLogin':
       return providerLogin(payload);
     case 'providerDashboard':
@@ -348,6 +384,8 @@ function routeApiAction_(action, payload) {
       return resetPassword(payload);
     case 'recoverEmailByTaxId':
       return recoverEmailByTaxId(payload);
+    case 'debugProviderAccount':
+      return debugProviderAccount(payload && payload.email);
     case 'requestAppointment':
       return requestAppointment(payload);
     case 'approveAppointment':
@@ -362,7 +400,8 @@ function routeApiAction_(action, payload) {
       return {
         service: 'proveedores-citas',
         status: 'ok',
-        mode: 'apps-script-api'
+        mode: 'apps-script-api',
+        build: 'provider-access-v1'
       };
     default:
       throw new Error('Accion API no soportada: ' + action);
@@ -1890,6 +1929,10 @@ function getProviderDashboard(criteria) {
 }
 
 function providerLogin(payload) {
+  return providerAccess(payload);
+}
+
+function providerAccess(payload) {
   ensureSheets_();
   payload = payload || {};
   var clean = normalizeLoginPayload_(payload);
