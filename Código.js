@@ -37,6 +37,13 @@ var SENSITIVE_FIELDS = {
   sessionTokenExpiresAt: true
 };
 
+var EXECUTION_CACHE = {
+  runtimeConfig: null,
+  spreadsheet: null,
+  sheetData: {},
+  storageLocationAreaMap: null
+};
+
 var SHEET_HEADERS = {};
 SHEET_HEADERS[APP_DEFAULTS.sheets.providers] = [
   'providerId',
@@ -629,14 +636,18 @@ function getBootstrapData_(mode) {
 }
 
 function getRuntimeConfig_() {
+  if (EXECUTION_CACHE.runtimeConfig) {
+    return EXECUTION_CACHE.runtimeConfig;
+  }
   var props = PropertiesService.getScriptProperties();
-  return {
+  EXECUTION_CACHE.runtimeConfig = {
     spreadsheetId: props.getProperty('SPREADSHEET_ID') || APP_DEFAULTS.spreadsheetId,
     supervisorName: props.getProperty('SUPERVISOR_NAME') || APP_DEFAULTS.supervisorName,
     slotMinutes: Number(props.getProperty('SLOT_MINUTES') || APP_DEFAULTS.slotMinutes),
     maxAdvanceDays: Number(props.getProperty('MAX_ADVANCE_DAYS') || APP_DEFAULTS.maxAdvanceDays),
     lookaheadDays: Number(props.getProperty('LOOKAHEAD_DAYS') || APP_DEFAULTS.lookaheadDays)
   };
+  return EXECUTION_CACHE.runtimeConfig;
 }
 
 function getProviderPortalUrl_() {
@@ -645,14 +656,20 @@ function getProviderPortalUrl_() {
 }
 
 function getStorageLocationAreaMap_() {
+  if (EXECUTION_CACHE.storageLocationAreaMap) {
+    return EXECUTION_CACHE.storageLocationAreaMap;
+  }
   var raw = String(PropertiesService.getScriptProperties().getProperty('STORAGE_LOCATION_AREA_MAP_JSON') || '').trim();
   if (!raw) {
-    return {};
+    EXECUTION_CACHE.storageLocationAreaMap = {};
+    return EXECUTION_CACHE.storageLocationAreaMap;
   }
   try {
-    return JSON.parse(raw);
+    EXECUTION_CACHE.storageLocationAreaMap = JSON.parse(raw);
+    return EXECUTION_CACHE.storageLocationAreaMap;
   } catch (error) {
-    return {};
+    EXECUTION_CACHE.storageLocationAreaMap = {};
+    return EXECUTION_CACHE.storageLocationAreaMap;
   }
 }
 
@@ -671,6 +688,11 @@ function getSapSyncConfig_() {
 }
 
 function ensureSheets_() {
+  var initCache = CacheService.getScriptCache();
+  var initKey = 'providers_sheets_ready_v4';
+  if (initCache.get(initKey) === '1') {
+    return;
+  }
   var spreadsheet = getSpreadsheet_();
   var legacySapSheet = spreadsheet.getSheetByName('SAP_PROVEEDORES');
   if (legacySapSheet) {
@@ -700,6 +722,7 @@ function ensureSheets_() {
       ensureConfigSheetRows_(sheet);
     }
   });
+  initCache.put(initKey, '1', 600);
 }
 
 function seedConfigSheet_(sheet) {
@@ -751,7 +774,11 @@ function getDefaultConfigRows_() {
 }
 
 function getSpreadsheet_() {
-  return SpreadsheetApp.openById(getRuntimeConfig_().spreadsheetId);
+  if (EXECUTION_CACHE.spreadsheet) {
+    return EXECUTION_CACHE.spreadsheet;
+  }
+  EXECUTION_CACHE.spreadsheet = SpreadsheetApp.openById(getRuntimeConfig_().spreadsheetId);
+  return EXECUTION_CACHE.spreadsheet;
 }
 
 function getSheet_(sheetName) {
@@ -763,13 +790,17 @@ function getSheet_(sheetName) {
 }
 
 function getSheetData_(sheetName) {
+  if (EXECUTION_CACHE.sheetData[sheetName]) {
+    return EXECUTION_CACHE.sheetData[sheetName];
+  }
   var sheet = getSheet_(sheetName);
   if (sheet.getLastRow() < 2) {
-    return [];
+    EXECUTION_CACHE.sheetData[sheetName] = [];
+    return EXECUTION_CACHE.sheetData[sheetName];
   }
   var values = sheet.getDataRange().getValues();
   var headers = values[0];
-  return values.slice(1).filter(function(row) {
+  EXECUTION_CACHE.sheetData[sheetName] = values.slice(1).filter(function(row) {
     return row.some(function(cell) { return cell !== ''; });
   }).map(function(row, index) {
     var item = {};
@@ -779,6 +810,7 @@ function getSheetData_(sheetName) {
     item._rowNumber = index + 2;
     return item;
   });
+  return EXECUTION_CACHE.sheetData[sheetName];
 }
 
 function saveRecord_(sheetName, record, idField, rowNumber) {
@@ -791,6 +823,7 @@ function saveRecord_(sheetName, record, idField, rowNumber) {
   if (rowNumber) {
     sheet.getRange(rowNumber, 1, 1, headers.length).setValues([row]);
     record._rowNumber = rowNumber;
+    delete EXECUTION_CACHE.sheetData[sheetName];
     return rowNumber;
   }
 
@@ -802,6 +835,7 @@ function saveRecord_(sheetName, record, idField, rowNumber) {
   }
   sheet.appendRow(row);
   record._rowNumber = sheet.getLastRow();
+  delete EXECUTION_CACHE.sheetData[sheetName];
   return record._rowNumber;
 }
 
@@ -1848,7 +1882,7 @@ function providerLogin(payload) {
   if (!verifyPassword_(clean.password, provider.passwordSalt, provider.passwordHash)) {
     throw new Error('La contrasena no es correcta.');
   }
-  return createAuthenticatedProviderResponse_(provider, payload.startDate || formatDate_(new Date()));
+  return createAuthenticatedProviderResponse_(provider);
 }
 
 function registerProvider(payload) {
@@ -1903,7 +1937,7 @@ function registerProvider(payload) {
   saveRecord_(APP_DEFAULTS.sheets.providers, record, 'providerId', existing && existing._rowNumber);
   audit_('PROVEEDOR_REGISTRO', record.providerId, record.email, 'Proveedor registrado con cuenta y contrasena.');
 
-  var authResponse = createAuthenticatedProviderResponse_(record, formatDate_(new Date()));
+  var authResponse = createAuthenticatedProviderResponse_(record);
   authResponse.message = record.registrationStatus === PROVIDER_STATUS.APPROVED
     ? 'Tu cuenta fue activada correctamente. Ya puedes solicitar citas.'
     : 'Tu cuenta fue creada. Grupo Santis validara y autorizara tu alta antes de solicitar citas.';
@@ -2078,14 +2112,14 @@ function buildProviderDashboardResponse_(provider, startDate) {
   };
 }
 
-function createAuthenticatedProviderResponse_(provider, startDate) {
+function createAuthenticatedProviderResponse_(provider) {
   var session = createProviderSession_(provider);
   return {
     ok: true,
     message: 'Sesion iniciada correctamente.',
     sessionToken: session.token,
     sessionExpiresAt: session.expiresAt,
-    dashboard: buildProviderDashboardResponse_(provider, startDate || formatDate_(new Date()))
+    provider: cleanRow_(provider)
   };
 }
 

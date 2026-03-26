@@ -80,12 +80,17 @@ async function submitRegistration(event) {
 
   try {
     const response = await api("registerProvider", payload);
-    showMessage(response.message, "success");
     handleAuthenticatedResponse(response);
-    showGeneratedCode(response.dashboard && response.dashboard.provider ? response.dashboard.provider.vendorCode : "");
+    showGeneratedCode(response.provider ? response.provider.vendorCode : "");
     activateTab("loginPanel");
     document.getElementById("lookupForm").email.value = payload.email || "";
     document.getElementById("lookupForm").password.value = payload.password || "";
+    if (response.provider && response.provider.registrationStatus === "APROBADO") {
+      showMessage("Cuenta creada. Cargando tus datos...", "loading");
+      await refreshDashboard();
+    } else {
+      showMessage(response.message, "success");
+    }
   } catch (error) {
     showMessage(error.message || "No pudimos completar tu registro en este momento. Intenta nuevamente en unos minutos.", "error");
   } finally {
@@ -145,8 +150,10 @@ async function submitLogin(event) {
 
   try {
     const response = await api("providerLogin", payload);
-    showMessage("Ingreso correcto.", "success");
     handleAuthenticatedResponse(response);
+    showMessage("Ingreso correcto. Cargando tus datos...", "loading");
+    await refreshDashboard();
+    showMessage("Ingreso correcto.", "success");
   } catch (error) {
     showMessage(error.message || "No pudimos iniciar sesi\u00f3n en este momento.", "error");
   } finally {
@@ -215,6 +222,9 @@ function handleAuthenticatedResponse(response) {
   if (sessionToken) {
     localStorage.setItem(SESSION_STORAGE_KEY, sessionToken);
   }
+  if (response.provider) {
+    renderAuthenticatedShell(response.provider);
+  }
   if (response.dashboard) {
     renderDashboard(response.dashboard);
   }
@@ -277,6 +287,23 @@ function renderDashboard(data) {
   } else {
     panel.classList.add("hidden");
   }
+}
+
+function renderAuthenticatedShell(provider) {
+  if (!provider) {
+    return;
+  }
+  activateTab("loginPanel");
+  providerState = provider;
+  document.getElementById("guestAccessBlock").classList.add("hidden");
+  document.getElementById("accountPanel").classList.remove("hidden");
+  const summary = document.getElementById("providerSummary");
+  summary.classList.remove("hidden");
+  summary.innerHTML = [
+    '<div class="status status-' + String(provider.registrationStatus || "pendiente").toLowerCase() + '">' + escapeHtml(provider.registrationStatus || "PENDIENTE") + "</div>",
+    "<p><strong>" + escapeHtml(provider.vendorName || "") + "</strong></p>",
+    "<p>C\u00f3digo de proveedor: " + escapeHtml(provider.vendorCode || "") + " | Correo: " + escapeHtml(provider.email || "") + "</p>"
+  ].join("");
 }
 
 function renderPendingPurchaseOrders() {
