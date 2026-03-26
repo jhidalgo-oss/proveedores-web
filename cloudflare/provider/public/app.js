@@ -142,7 +142,7 @@ async function submitLogin(event) {
   showMessage("Validando tu acceso...", "loading");
 
   try {
-    const response = await api("providerAccess", payload);
+    const response = await api("providerLogin", payload);
     handleAuthenticatedResponse(response);
     if (hasRenderableDashboard(response.dashboard)) {
       showMessage("Ingreso correcto.", "success");
