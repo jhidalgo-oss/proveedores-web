@@ -321,6 +321,7 @@ function renderAuthenticatedShell(provider) {
     return;
   }
   activateTab("loginPanel");
+  setAccessAuthenticatedMode(true);
   providerState = provider;
   document.getElementById("guestAccessBlock").classList.add("hidden");
   document.getElementById("accountPanel").classList.remove("hidden");
@@ -863,6 +864,7 @@ function resetProviderView() {
   appointmentsState = [];
   pendingPurchaseOrdersState = [];
   selectedSlot = null;
+  setAccessAuthenticatedMode(false);
   document.getElementById("guestAccessBlock").classList.remove("hidden");
   document.getElementById("accountPanel").classList.add("hidden");
   document.getElementById("providerSummary").classList.add("hidden");
@@ -882,6 +884,32 @@ function resetProviderView() {
   document.getElementById("appointmentOcSummary").classList.add("hidden");
   document.getElementById("appointmentOcSummary").innerHTML = "";
   renderPersistentWarning("");
+}
+
+function setAccessAuthenticatedMode(isAuthenticated) {
+  const accessIntro = document.getElementById("accessIntro");
+  const accessTabs = document.getElementById("accessTabs");
+  const registerPanel = document.getElementById("registerPanel");
+  const guestAccessBlock = document.getElementById("guestAccessBlock");
+
+  if (accessIntro) {
+    accessIntro.classList.toggle("hidden", isAuthenticated);
+  }
+  if (accessTabs) {
+    accessTabs.classList.toggle("hidden", isAuthenticated);
+  }
+  if (registerPanel) {
+    registerPanel.classList.toggle("hidden", isAuthenticated);
+    registerPanel.hidden = Boolean(isAuthenticated);
+    registerPanel.classList.remove("is-active");
+  }
+  if (guestAccessBlock) {
+    guestAccessBlock.classList.toggle("hidden", isAuthenticated);
+  }
+
+  if (!isAuthenticated) {
+    activateTab("loginPanel");
+  }
 }
 
 function collapseDashboardPanels() {
