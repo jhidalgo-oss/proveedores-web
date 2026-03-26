@@ -858,6 +858,9 @@ function buildCalendar_(startDateText, days, includeDetails) {
   var appointments = getSheetData_(APP_DEFAULTS.sheets.appointments)
     .filter(function(row) {
       return row.appointmentStatus === APPOINTMENT_STATUS.PENDING || row.appointmentStatus === APPOINTMENT_STATUS.APPROVED;
+    })
+    .filter(function(row) {
+      return Boolean(tryParseLocalDateTime_(row.effectiveStart));
     });
   var byStart = {};
 
@@ -898,8 +901,11 @@ function buildCalendar_(startDateText, days, includeDetails) {
         if (!byStart[row.effectiveStart]) {
           return;
         }
-        var start = parseLocalDateTime_(row.effectiveStart);
-        var end = parseLocalDateTime_(row.effectiveEnd);
+        var start = tryParseLocalDateTime_(row.effectiveStart);
+        var end = tryParseLocalDateTime_(row.effectiveEnd);
+        if (!start || !end) {
+          return;
+        }
         var label = formatSlotLabel_(start, end) + ' (extra)';
         var status = row.appointmentStatus === APPOINTMENT_STATUS.APPROVED ? 'APPROVED' : 'PENDING';
         if (!slots.some(function(slot) { return slot.startIso === row.effectiveStart; })) {
@@ -1733,6 +1739,18 @@ function parseLocalDateTime_(value) {
   );
 }
 
+function tryParseLocalDateTime_(value) {
+  try {
+    var parsed = parseLocalDateTime_(value);
+    if (!parsed || isNaN(parsed.getTime())) {
+      return null;
+    }
+    return parsed;
+  } catch (error) {
+    return null;
+  }
+}
+
 function makeDateTime_(dateText, hour, minute) {
   var date = parseLocalDate_(dateText);
   date.setHours(hour, minute, 0, 0);
@@ -1980,7 +1998,11 @@ function resetPassword(payload) {
   if (!provider || !provider.resetTokenHash) {
     throw new Error('La solicitud de recuperacion no es valida o ya expiro.');
   }
-  if (provider.resetTokenExpiresAt && parseLocalDateTime_(provider.resetTokenExpiresAt) < new Date()) {
+  var resetExpiresAt = provider.resetTokenExpiresAt ? tryParseLocalDateTime_(provider.resetTokenExpiresAt) : null;
+  if (provider.resetTokenExpiresAt && !resetExpiresAt) {
+    throw new Error('La solicitud de recuperacion ya expiro. Solicita una nueva.');
+  }
+  if (resetExpiresAt && resetExpiresAt < new Date()) {
     throw new Error('La solicitud de recuperacion ya expiro. Solicita una nueva.');
   }
   if (provider.resetTokenHash !== hashPlain_(clean.resetCode)) {
@@ -2165,7 +2187,14 @@ function getProviderBySession_(sessionToken) {
   if (!provider) {
     return null;
   }
-  if (provider.sessionTokenExpiresAt && parseLocalDateTime_(provider.sessionTokenExpiresAt) < new Date()) {
+  var expiresAt = provider.sessionTokenExpiresAt ? tryParseLocalDateTime_(provider.sessionTokenExpiresAt) : null;
+  if (provider.sessionTokenExpiresAt && !expiresAt) {
+    provider.sessionTokenHash = '';
+    provider.sessionTokenExpiresAt = '';
+    saveRecord_(APP_DEFAULTS.sheets.providers, provider, 'providerId', provider._rowNumber);
+    return null;
+  }
+  if (expiresAt && expiresAt < new Date()) {
     provider.sessionTokenHash = '';
     provider.sessionTokenExpiresAt = '';
     saveRecord_(APP_DEFAULTS.sheets.providers, provider, 'providerId', provider._rowNumber);
