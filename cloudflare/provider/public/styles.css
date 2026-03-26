@@ -977,42 +977,64 @@ textarea:disabled,
 }
 
 .calendar {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-  gap: 14px;
+  min-width: 0;
 }
 
 .provider-agenda {
-  display: grid;
-  gap: 18px;
+  display: block;
 }
 
 .agenda-week {
-  border: 1px solid rgba(54, 41, 22, 0.08);
+  border: 1px solid rgba(120, 156, 182, 0.22);
   border-radius: 18px;
-  background: rgba(255, 255, 255, 0.72);
-  padding: 14px;
+  background:
+    linear-gradient(180deg, rgba(242, 248, 252, 0.92), rgba(234, 243, 249, 0.88)),
+    rgba(255, 255, 255, 0.82);
+  padding: 16px;
+  box-shadow: 0 14px 28px rgba(41, 67, 90, 0.08);
 }
 
 .agenda-week-head {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   gap: 12px;
-  margin-bottom: 12px;
+  margin-bottom: 14px;
+}
+
+.agenda-week-meta {
+  display: grid;
+  gap: 4px;
 }
 
 .agenda-week-head p {
   margin: 0;
-  color: var(--muted);
+  color: #526579;
   font-size: 13px;
   line-height: 1.35;
-  font-weight: 600;
+  font-weight: 700;
+}
+
+.agenda-week-nav {
+  display: flex;
+  gap: 10px;
+}
+
+.agenda-nav-button {
+  min-height: 38px;
+  padding: 0 16px;
+  background: rgba(236, 244, 249, 0.92);
+  border-color: rgba(120, 156, 182, 0.18);
+  color: #29435a;
+}
+
+.agenda-nav-button:disabled {
+  opacity: 0.48;
 }
 
 .agenda-grid {
   display: grid;
-  gap: 8px;
+  gap: 6px;
   align-items: stretch;
 }
 
@@ -1030,9 +1052,9 @@ textarea:disabled,
   justify-content: flex-start;
   padding: 8px 10px;
   border-radius: 12px;
-  background: rgba(16, 61, 33, 0.06);
-  color: var(--forest);
-  font-size: 12px;
+  background: rgba(214, 228, 238, 0.72);
+  color: #29435a;
+  font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -1043,8 +1065,8 @@ textarea:disabled,
   gap: 2px;
   padding: 8px 10px;
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.92);
-  border: 1px solid rgba(54, 41, 22, 0.08);
+  background: rgba(248, 251, 253, 0.96);
+  border: 1px solid rgba(120, 156, 182, 0.18);
 }
 
 .agenda-day-head strong {
@@ -1053,7 +1075,7 @@ textarea:disabled,
 }
 
 .agenda-day-head span {
-  color: var(--muted);
+  color: #687b8d;
   font-size: 11px;
   line-height: 1.25;
 }
@@ -1068,24 +1090,67 @@ textarea:disabled,
   align-items: center;
   justify-content: center;
   width: 100%;
-  min-height: 32px;
+  min-height: 26px;
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.55);
-  border: 1px dashed rgba(54, 41, 22, 0.08);
-  color: var(--muted-soft);
-  font-size: 12px;
+  background: rgba(248, 251, 253, 0.52);
+  border: 1px dashed rgba(168, 186, 202, 0.28);
+}
+
+.agenda-empty-state {
+  padding: 24px;
+  border-radius: 18px;
+  border: 1px solid rgba(120, 156, 182, 0.18);
+  background: rgba(242, 248, 252, 0.8);
+  color: #526579;
+  font-size: 15px;
+  line-height: 1.6;
 }
 
 .agenda-slot {
   justify-content: center;
   width: 100%;
-  min-height: 34px;
-  padding: 8px 8px;
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 1.15;
-  text-align: center;
- }
+  min-height: 28px;
+  padding: 0;
+  border-radius: 10px;
+  border: 1px solid rgba(120, 156, 182, 0.16);
+  box-shadow: none;
+}
+
+.agenda-slot-indicator {
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: 0.9;
+}
+
+.agenda-slot:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 18px rgba(41, 67, 90, 0.12);
+}
+
+.agenda-slot.slot-available {
+  background: linear-gradient(180deg, #edf6ff, #e1effd);
+  color: #6fa7d6;
+  border-color: rgba(111, 167, 214, 0.24);
+}
+
+.agenda-slot.slot-pending {
+  background: linear-gradient(180deg, #eef2f5, #e2e8ee);
+  color: #9aa8b4;
+  border-color: rgba(154, 168, 180, 0.26);
+}
+
+.agenda-slot.slot-approved {
+  background: linear-gradient(180deg, #dbeaf8, #cddff0);
+  color: #4f88b8;
+  border-color: rgba(79, 136, 184, 0.28);
+}
+
+.agenda-slot:disabled {
+  opacity: 1;
+  cursor: default;
+}
 
 .day-card {
   padding: 14px;
@@ -1188,8 +1253,8 @@ textarea:disabled,
 }
 
 .slot.selected {
-  outline: 2px solid rgba(16, 61, 33, 0.6);
-  box-shadow: 0 0 0 5px rgba(16, 61, 33, 0.08);
+  outline: 2px solid rgba(45, 111, 164, 0.78);
+  box-shadow: 0 0 0 4px rgba(127, 172, 213, 0.18);
 }
 
 .request-box {

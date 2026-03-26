@@ -7,6 +7,9 @@ let selectedSlot = null;
 let appointmentsState = [];
 let pendingPurchaseOrdersState = [];
 let sessionToken = "";
+let currentCalendarWeeks = [];
+let currentWeekIndex = 0;
+let messageHideTimer = null;
 
 document.addEventListener("DOMContentLoaded", async function () {
   wireEvents();
@@ -264,6 +267,8 @@ function renderDashboard(data, options) {
   appointmentsState = data.appointments || [];
   pendingPurchaseOrdersState = data.pendingPurchaseOrders || [];
   selectedSlot = null;
+  currentCalendarWeeks = [];
+  currentWeekIndex = 0;
   document.getElementById("selectedSlotLabel").textContent = "Ninguna";
   document.getElementById("guestAccessBlock").classList.add("hidden");
   document.getElementById("accountPanel").classList.remove("hidden");
@@ -408,79 +413,128 @@ function renderCalendar(calendar) {
   const wrapper = document.getElementById("calendar");
   wrapper.innerHTML = "";
   wrapper.classList.add("provider-agenda");
+  currentCalendarWeeks = groupCalendarWeeks(calendar.days || []);
+  currentWeekIndex = normalizeWeekIndex(currentWeekIndex, currentCalendarWeeks.length);
+  renderCurrentCalendarWeek();
+}
 
-  groupCalendarWeeks(calendar.days || []).forEach(function (week) {
-    const weekNode = document.createElement("section");
-    weekNode.className = "agenda-week";
+function renderCurrentCalendarWeek() {
+  const wrapper = document.getElementById("calendar");
+  if (!wrapper) {
+    return;
+  }
 
-    const head = document.createElement("div");
-    head.className = "agenda-week-head";
-    head.innerHTML = [
-      "<span class=\"eyebrow\">SEMANA</span>",
-      "<p>" + escapeHtml(week.label) + "</p>"
+  wrapper.innerHTML = "";
+
+  if (!currentCalendarWeeks.length) {
+    wrapper.innerHTML = '<div class="agenda-empty-state">No hay disponibilidad publicada para esta semana.</div>';
+    return;
+  }
+
+  const week = currentCalendarWeeks[currentWeekIndex];
+  const weekNode = document.createElement("section");
+  weekNode.className = "agenda-week";
+
+  const head = document.createElement("div");
+  head.className = "agenda-week-head";
+
+  const weekMeta = document.createElement("div");
+  weekMeta.className = "agenda-week-meta";
+  weekMeta.innerHTML = [
+    '<span class="eyebrow">SEMANA ' + escapeHtml(String(week.weekNumber)) + "</span>",
+    "<p>" + escapeHtml(week.label) + "</p>"
+  ].join("");
+
+  const weekNav = document.createElement("div");
+  weekNav.className = "agenda-week-nav";
+
+  const prevButton = document.createElement("button");
+  prevButton.type = "button";
+  prevButton.className = "button subtle agenda-nav-button";
+  prevButton.textContent = "Anterior";
+  prevButton.disabled = currentWeekIndex === 0;
+  prevButton.addEventListener("click", function () {
+    currentWeekIndex = normalizeWeekIndex(currentWeekIndex - 1, currentCalendarWeeks.length);
+    renderCurrentCalendarWeek();
+  });
+
+  const nextButton = document.createElement("button");
+  nextButton.type = "button";
+  nextButton.className = "button subtle agenda-nav-button";
+  nextButton.textContent = "Siguiente";
+  nextButton.disabled = currentWeekIndex >= currentCalendarWeeks.length - 1;
+  nextButton.addEventListener("click", function () {
+    currentWeekIndex = normalizeWeekIndex(currentWeekIndex + 1, currentCalendarWeeks.length);
+    renderCurrentCalendarWeek();
+  });
+
+  weekNav.appendChild(prevButton);
+  weekNav.appendChild(nextButton);
+  head.appendChild(weekMeta);
+  head.appendChild(weekNav);
+  weekNode.appendChild(head);
+
+  const grid = document.createElement("div");
+  grid.className = "agenda-grid";
+  grid.style.gridTemplateColumns = "72px repeat(" + week.days.length + ", minmax(0, 1fr))";
+
+  const corner = document.createElement("div");
+  corner.className = "agenda-corner";
+  corner.textContent = "Hora";
+  grid.appendChild(corner);
+
+  week.days.forEach(function (day) {
+    const dayHead = document.createElement("div");
+    dayHead.className = "agenda-day-head";
+    dayHead.innerHTML = [
+      "<strong>" + escapeHtml(day.weekday) + "</strong>",
+      "<span>" + escapeHtml(day.date) + "</span>"
     ].join("");
-    weekNode.appendChild(head);
+    grid.appendChild(dayHead);
+  });
 
-    const grid = document.createElement("div");
-    grid.className = "agenda-grid";
-    grid.style.gridTemplateColumns = "88px repeat(" + week.days.length + ", minmax(0, 1fr))";
-
-    const corner = document.createElement("div");
-    corner.className = "agenda-corner";
-    corner.textContent = "Hora";
-    grid.appendChild(corner);
+  buildWeekTimeRows(week.days).forEach(function (row) {
+    const timeCell = document.createElement("div");
+    timeCell.className = "agenda-time";
+    timeCell.textContent = row.timeLabel;
+    grid.appendChild(timeCell);
 
     week.days.forEach(function (day) {
-      const dayHead = document.createElement("div");
-      dayHead.className = "agenda-day-head";
-      dayHead.innerHTML = [
-        "<strong>" + escapeHtml(day.weekday) + "</strong>",
-        "<span>" + escapeHtml(day.date) + "</span>"
-      ].join("");
-      grid.appendChild(dayHead);
-    });
+      const slot = row.byDate[day.date] || null;
+      const cell = document.createElement("div");
+      cell.className = "agenda-cell";
 
-    buildWeekTimeRows(week.days).forEach(function (row) {
-      const timeCell = document.createElement("div");
-      timeCell.className = "agenda-time";
-      timeCell.textContent = row.timeLabel;
-      grid.appendChild(timeCell);
-
-      week.days.forEach(function (day) {
-        const slot = row.byDate[day.date] || null;
-        const cell = document.createElement("div");
-        cell.className = "agenda-cell";
-
-        if (!slot) {
-          cell.innerHTML = '<span class="agenda-empty">-</span>';
-          grid.appendChild(cell);
-          return;
-        }
-
-        const button = document.createElement("button");
-        button.type = "button";
-        button.className = "slot agenda-slot slot-" + String(slot.status || "available").toLowerCase();
-        button.disabled = !slot.isSelectable;
-        button.innerHTML = "<span>" + escapeHtml(getAgendaSlotLabel(slot)) + "</span>";
-        if (selectedSlot && selectedSlot.startIso === slot.startIso) {
-          button.classList.add("selected");
-        }
-        button.addEventListener("click", function () {
-          selectedSlot = slot;
-          document.getElementById("selectedSlotLabel").textContent = slot.startIso + " (" + slot.label + ")";
-          document.querySelectorAll(".agenda-slot.selected").forEach(function (node) {
-            node.classList.remove("selected");
-          });
-          button.classList.add("selected");
-        });
-        cell.appendChild(button);
+      if (!slot) {
+        cell.innerHTML = '<span class="agenda-empty"></span>';
         grid.appendChild(cell);
-      });
-    });
+        return;
+      }
 
-    weekNode.appendChild(grid);
-    wrapper.appendChild(weekNode);
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "slot agenda-slot slot-" + String(slot.status || "available").toLowerCase();
+      button.disabled = !slot.isSelectable;
+      button.title = buildAgendaSlotTitle(day, slot);
+      button.setAttribute("aria-label", buildAgendaSlotTitle(day, slot));
+      button.innerHTML = '<span class="agenda-slot-indicator" aria-hidden="true"></span>';
+      if (selectedSlot && selectedSlot.startIso === slot.startIso) {
+        button.classList.add("selected");
+      }
+      button.addEventListener("click", function () {
+        selectedSlot = slot;
+        document.getElementById("selectedSlotLabel").textContent = day.weekday + " " + day.date + " · " + slot.label;
+        document.querySelectorAll(".agenda-slot.selected").forEach(function (node) {
+          node.classList.remove("selected");
+        });
+        button.classList.add("selected");
+      });
+      cell.appendChild(button);
+      grid.appendChild(cell);
+    });
   });
+
+  weekNode.appendChild(grid);
+  wrapper.appendChild(weekNode);
 }
 
 function groupCalendarWeeks(days) {
@@ -492,7 +546,8 @@ function groupCalendarWeeks(days) {
     }
     weeks.push({
       days: weekDays,
-      label: weekDays[0].date + " al " + weekDays[weekDays.length - 1].date
+      label: weekDays[0].date + " al " + weekDays[weekDays.length - 1].date,
+      weekNumber: getIsoWeekNumber(weekDays[0].date)
     });
   }
   return weeks;
@@ -537,6 +592,29 @@ function getAgendaSlotLabel(slot) {
     return "Tomado";
   }
   return slot.label || "";
+}
+
+function buildAgendaSlotTitle(day, slot) {
+  return day.weekday + " " + day.date + " · " + slot.label + " · " + getAgendaSlotLabel(slot);
+}
+
+function normalizeWeekIndex(index, total) {
+  if (!total) {
+    return 0;
+  }
+  return Math.max(0, Math.min(index, total - 1));
+}
+
+function getIsoWeekNumber(dateString) {
+  const date = new Date(String(dateString || "") + "T00:00:00");
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+  const utcDate = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const dayNum = utcDate.getUTCDay() || 7;
+  utcDate.setUTCDate(utcDate.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(utcDate.getUTCFullYear(), 0, 1));
+  return Math.ceil((((utcDate - yearStart) / 86400000) + 1) / 7);
 }
 
 function renderAppointments(appointments) {
@@ -761,7 +839,15 @@ function formToObject(form) {
 }
 
 function showMessage(text, type) {
+  if (messageHideTimer) {
+    clearTimeout(messageHideTimer);
+    messageHideTimer = null;
+  }
+
   ["message", "accessMessage"].forEach(function (id) {
+    if (id === "accessMessage" && isAccessShellAuthenticated()) {
+      return;
+    }
     const box = document.getElementById(id);
     if (!box) {
       return;
@@ -771,16 +857,43 @@ function showMessage(text, type) {
   });
 
   const accessBox = document.getElementById("accessMessage");
-  if (accessBox && typeof accessBox.scrollIntoView === "function") {
+  if (accessBox && !isAccessShellAuthenticated() && typeof accessBox.scrollIntoView === "function") {
     accessBox.scrollIntoView({
       behavior: "smooth",
       block: "nearest"
     });
   }
+
+  if (type === "success") {
+    messageHideTimer = setTimeout(function () {
+      ["message", "accessMessage"].forEach(function (id) {
+        const box = document.getElementById(id);
+        if (!box) {
+          return;
+        }
+        box.textContent = "";
+        box.className = "message hidden";
+      });
+    }, 2200);
+  }
+}
+
+function isAccessShellAuthenticated() {
+  const guestAccessBlock = document.getElementById("guestAccessBlock");
+  return Boolean(guestAccessBlock && guestAccessBlock.classList.contains("hidden"));
 }
 
 function hideGlobalMessage() {
   const box = document.getElementById("message");
+  if (!box) {
+    return;
+  }
+  box.textContent = "";
+  box.className = "message hidden";
+}
+
+function hideAccessMessage() {
+  const box = document.getElementById("accessMessage");
   if (!box) {
     return;
   }
@@ -912,6 +1025,7 @@ function resetProviderView() {
   document.getElementById("appointmentOcSearch").value = "";
   document.getElementById("appointmentOcSummary").classList.add("hidden");
   document.getElementById("appointmentOcSummary").innerHTML = "";
+  hideAccessMessage();
   renderPersistentWarning("");
 }
 
@@ -920,6 +1034,7 @@ function setAccessAuthenticatedMode(isAuthenticated) {
   const accessTabs = document.getElementById("accessTabs");
   const registerPanel = document.getElementById("registerPanel");
   const guestAccessBlock = document.getElementById("guestAccessBlock");
+  const accessMessage = document.getElementById("accessMessage");
 
   if (accessIntro) {
     accessIntro.classList.toggle("hidden", isAuthenticated);
@@ -935,6 +1050,13 @@ function setAccessAuthenticatedMode(isAuthenticated) {
   if (guestAccessBlock) {
     guestAccessBlock.classList.toggle("hidden", isAuthenticated);
   }
+  if (accessMessage) {
+    accessMessage.classList.toggle("hidden", isAuthenticated);
+    if (isAuthenticated) {
+      accessMessage.textContent = "";
+      accessMessage.className = "message hidden";
+    }
+  }
 
   if (!isAuthenticated) {
     activateTab("loginPanel");
@@ -945,6 +1067,8 @@ function collapseDashboardPanels() {
   appointmentsState = [];
   pendingPurchaseOrdersState = [];
   selectedSlot = null;
+  currentCalendarWeeks = [];
+  currentWeekIndex = 0;
   document.getElementById("appointmentPanel").classList.add("hidden");
   document.getElementById("appointmentsHistory").classList.add("hidden");
   document.getElementById("appointmentOc").innerHTML = '<option value="">Selecciona una OC abierta</option>';
