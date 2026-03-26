@@ -2119,18 +2119,50 @@ function requestAppointment(payload) {
 
 function buildProviderDashboardResponse_(provider, startDate) {
   var config = getRuntimeConfig_();
-  var pendingPurchaseOrders = getPendingPurchaseOrdersForProvider_(provider);
+  var warnings = buildProviderWarnings_(provider, []);
+  var pendingPurchaseOrders = [];
+  var appointments = [];
+  var calendar = null;
+
+  try {
+    pendingPurchaseOrders = getPendingPurchaseOrdersForProvider_(provider);
+  } catch (error) {
+    warnings.push('No pudimos cargar temporalmente tus OCs abiertas. Intenta actualizar en unos minutos.');
+    audit_('PROVIDER_DASHBOARD_WARNING', provider.providerId, provider.email, 'openOrders: ' + String(error && error.message || error));
+  }
+
+  warnings = buildProviderWarnings_(provider, pendingPurchaseOrders).concat(
+    warnings.filter(function(warning) {
+      return buildProviderWarnings_(provider, pendingPurchaseOrders).indexOf(warning) === -1;
+    })
+  );
+
+  try {
+    appointments = getProviderAppointments_(provider.providerId);
+  } catch (error) {
+    warnings.push('No pudimos cargar temporalmente tu historial de citas.');
+    audit_('PROVIDER_DASHBOARD_WARNING', provider.providerId, provider.email, 'appointments: ' + String(error && error.message || error));
+  }
+
   var canRequestAppointments = provider.registrationStatus === PROVIDER_STATUS.APPROVED && pendingPurchaseOrders.length > 0;
+  if (canRequestAppointments) {
+    try {
+      calendar = buildCalendar_(startDate, config.lookaheadDays, false);
+    } catch (error) {
+      calendar = null;
+      warnings.push('No pudimos cargar temporalmente la disponibilidad. Intenta actualizar nuevamente.');
+      audit_('PROVIDER_DASHBOARD_WARNING', provider.providerId, provider.email, 'calendar: ' + String(error && error.message || error));
+    }
+  }
+
   return {
     found: true,
     provider: cleanRow_(provider),
-    warnings: buildProviderWarnings_(provider, pendingPurchaseOrders),
+    warnings: uniqueValues_(warnings),
     pendingPurchaseOrders: pendingPurchaseOrders,
-    appointments: getProviderAppointments_(provider.providerId),
+    appointments: appointments,
     canRequestAppointments: canRequestAppointments,
-    calendar: canRequestAppointments
-      ? buildCalendar_(startDate, config.lookaheadDays, false)
-      : null
+    calendar: calendar
   };
 }
 
