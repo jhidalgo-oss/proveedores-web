@@ -93,7 +93,6 @@
             </div>
 
             <div id="accessMessage" class="message hidden"></div>
-            <a class="support-button" href="https://wa.me/51968011921?text=Hola%20Freddy%2C%20necesito%20ayuda%20con%20el%20portal%20de%20proveedores." target="_blank" rel="noopener noreferrer">WhatsApp Freddy Cierto</a>
 
             <div class="tab-panels">
               <article id="loginPanel" class="tab-panel login-card is-active" data-tab-panel>
@@ -104,64 +103,74 @@
                   </div>
                   <span class="priority-badge">Principal</span>
                 </div>
-                <p class="muted section-copy">Ingresa con tu correo y tu contrase&ntilde;a para revisar tu historial y solicitar una nueva cita.</p>
+                <div id="guestAccessBlock">
+                  <p class="muted section-copy">Ingresa con tu correo y tu contrase&ntilde;a para revisar tu historial y solicitar una nueva cita.</p>
 
-                <form id="lookupForm" class="stack">
-                  <label>Correo registrado
-                    <input name="email" type="email" required>
-                  </label>
-                  <label>Contrase&ntilde;a
-                    <input name="password" type="password" required>
-                  </label>
-                  <button type="submit" class="button primary wide" data-loading-text="Ingresando...">Ingresar</button>
-                </form>
-
-                <div class="inline-actions">
-                  <button id="forgotPasswordToggle" class="text-button" type="button">Olvid&eacute; mi contrase&ntilde;a</button>
-                  <button id="forgotEmailToggle" class="text-button" type="button">No recuerdo mi correo</button>
-                </div>
-
-                <div id="passwordRecoveryPanel" class="recovery-panel hidden">
-                  <h4>Recupera tu contrase&ntilde;a</h4>
-                  <p class="muted compact">Te enviaremos un c&oacute;digo de recuperaci&oacute;n al correo registrado.</p>
-                  <form id="passwordRecoveryRequestForm" class="stack dense">
+                  <form id="lookupForm" class="stack">
                     <label>Correo registrado
                       <input name="email" type="email" required>
                     </label>
-                    <button type="submit" class="button ghost wide" data-loading-text="Enviando...">Enviar c&oacute;digo</button>
-                  </form>
-                  <form id="passwordResetForm" class="stack dense top-gap">
-                    <label>Correo registrado
-                      <input name="email" type="email" required>
-                    </label>
-                    <label>C&oacute;digo de recuperaci&oacute;n
-                      <input name="resetCode" required>
-                    </label>
-                    <label>Nueva contrase&ntilde;a
+                    <label>Contrase&ntilde;a
                       <input name="password" type="password" required>
                     </label>
-                    <label>Confirmar contrase&ntilde;a
-                      <input name="passwordConfirm" type="password" required>
-                    </label>
-                    <button type="submit" class="button secondary wide" data-loading-text="Actualizando...">Actualizar contrase&ntilde;a</button>
+                    <button type="submit" class="button primary wide" data-loading-text="Ingresando...">Ingresar</button>
                   </form>
+
+                  <div class="inline-actions">
+                    <button id="forgotPasswordToggle" class="text-button" type="button">Olvid&eacute; mi contrase&ntilde;a</button>
+                    <button id="forgotEmailToggle" class="text-button" type="button">No recuerdo mi correo</button>
+                  </div>
+
+                  <div id="passwordRecoveryPanel" class="recovery-panel hidden">
+                    <h4>Recupera tu contrase&ntilde;a</h4>
+                    <p class="muted compact">Te enviaremos un c&oacute;digo de recuperaci&oacute;n al correo registrado.</p>
+                    <form id="passwordRecoveryRequestForm" class="stack dense">
+                      <label>Correo registrado
+                        <input name="email" type="email" required>
+                      </label>
+                      <button type="submit" class="button ghost wide" data-loading-text="Enviando...">Enviar c&oacute;digo</button>
+                    </form>
+                    <form id="passwordResetForm" class="stack dense top-gap">
+                      <label>Correo registrado
+                        <input name="email" type="email" required>
+                      </label>
+                      <label>C&oacute;digo de recuperaci&oacute;n
+                        <input name="resetCode" required>
+                      </label>
+                      <label>Nueva contrase&ntilde;a
+                        <input name="password" type="password" required>
+                      </label>
+                      <label>Confirmar contrase&ntilde;a
+                        <input name="passwordConfirm" type="password" required>
+                      </label>
+                      <button type="submit" class="button secondary wide" data-loading-text="Actualizando...">Actualizar contrase&ntilde;a</button>
+                    </form>
+                  </div>
+
+                  <div id="emailRecoveryPanel" class="recovery-panel hidden">
+                    <h4>Recupera tu correo</h4>
+                    <p class="muted compact">Ingresa tu RUC para consultar el correo asociado. Si necesitas cambiarlo, solo Grupo Santis puede hacerlo.</p>
+                    <form id="emailRecoveryForm" class="stack dense">
+                      <label>RUC
+                        <input name="taxId" inputmode="numeric" required>
+                      </label>
+                      <button type="submit" class="button ghost wide" data-loading-text="Consultando...">Consultar correo</button>
+                    </form>
+                    <div id="emailRecoveryResult" class="summary hidden"></div>
+                  </div>
                 </div>
 
-                <div id="emailRecoveryPanel" class="recovery-panel hidden">
-                  <h4>Recupera tu correo</h4>
-                  <p class="muted compact">Ingresa tu RUC para consultar el correo asociado. Si necesitas cambiarlo, solo Grupo Santis puede hacerlo.</p>
-                  <form id="emailRecoveryForm" class="stack dense">
-                    <label>RUC
-                      <input name="taxId" inputmode="numeric" required>
-                    </label>
-                    <button type="submit" class="button ghost wide" data-loading-text="Consultando...">Consultar correo</button>
-                  </form>
-                  <div id="emailRecoveryResult" class="summary hidden"></div>
+                <div id="accountPanel" class="account-panel hidden">
+                  <div class="account-panel-head">
+                    <div>
+                      <span class="eyebrow">TU CUENTA</span>
+                      <h4>Resumen de acceso</h4>
+                    </div>
+                    <button id="logoutButton" class="button subtle" type="button">Cerrar sesi&oacute;n</button>
+                  </div>
+                  <div id="providerSummary" class="summary hidden"></div>
+                  <div id="generatedCodeBox" class="summary hidden"></div>
                 </div>
-
-                <div id="providerSummary" class="summary hidden"></div>
-                <div id="generatedCodeBox" class="summary hidden"></div>
-                <button id="logoutButton" class="button subtle wide hidden" type="button">Cerrar sesi&oacute;n</button>
                 <div id="warnings" class="stack"></div>
               </article>
 
@@ -204,6 +213,11 @@
                   <button type="submit" class="button secondary wide" data-loading-text="Registrando...">Registrarme</button>
                 </form>
               </article>
+            </div>
+
+            <div class="support-panel">
+              <p class="support-copy">Si necesitas ayuda con tu acceso o con una cita, puedes escribirle directo a Freddy.</p>
+              <a class="support-button" href="https://wa.me/51968011921?text=Hola%20Freddy%2C%20necesito%20ayuda%20con%20el%20portal%20de%20proveedores." target="_blank" rel="noopener noreferrer">WhatsApp Freddy Cierto</a>
             </div>
           </section>
         </aside>

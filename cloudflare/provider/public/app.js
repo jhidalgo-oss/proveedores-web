@@ -247,7 +247,8 @@ function renderDashboard(data) {
   pendingPurchaseOrdersState = data.pendingPurchaseOrders || [];
   selectedSlot = null;
   document.getElementById("selectedSlotLabel").textContent = "Ninguna";
-  document.getElementById("logoutButton").classList.remove("hidden");
+  document.getElementById("guestAccessBlock").classList.add("hidden");
+  document.getElementById("accountPanel").classList.remove("hidden");
 
   const summary = document.getElementById("providerSummary");
   summary.classList.remove("hidden");
@@ -533,6 +534,7 @@ function showGeneratedCode(vendorCode) {
   if (!vendorCode) {
     return;
   }
+  document.getElementById("accountPanel").classList.remove("hidden");
   const generatedCodeBox = document.getElementById("generatedCodeBox");
   generatedCodeBox.classList.remove("hidden");
   generatedCodeBox.innerHTML = [
@@ -713,13 +715,20 @@ function resetProviderView() {
   appointmentsState = [];
   pendingPurchaseOrdersState = [];
   selectedSlot = null;
+  document.getElementById("guestAccessBlock").classList.remove("hidden");
+  document.getElementById("accountPanel").classList.add("hidden");
   document.getElementById("providerSummary").classList.add("hidden");
   document.getElementById("generatedCodeBox").classList.add("hidden");
   document.getElementById("appointmentPanel").classList.add("hidden");
   document.getElementById("appointmentsHistory").classList.add("hidden");
   document.getElementById("warnings").innerHTML = "";
   document.getElementById("emailRecoveryResult").classList.add("hidden");
-  document.getElementById("logoutButton").classList.add("hidden");
+  document.getElementById("lookupForm").reset();
+  document.getElementById("passwordRecoveryRequestForm").reset();
+  document.getElementById("passwordResetForm").reset();
+  document.getElementById("emailRecoveryForm").reset();
+  document.getElementById("passwordRecoveryPanel").classList.add("hidden");
+  document.getElementById("emailRecoveryPanel").classList.add("hidden");
   document.getElementById("appointmentOc").innerHTML = '<option value="">Selecciona una OC abierta</option>';
   document.getElementById("appointmentOcSearch").value = "";
   document.getElementById("appointmentOcSummary").classList.add("hidden");
