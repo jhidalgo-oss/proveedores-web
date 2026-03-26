@@ -87,13 +87,18 @@ async function submitRegistration(event) {
     document.getElementById("lookupForm").email.value = payload.email || "";
     document.getElementById("lookupForm").password.value = payload.password || "";
     if (response.provider && response.provider.registrationStatus === "APROBADO") {
-      if (response.dashboard) {
+      if (response.dashboard && response.dashboard.found !== false) {
         showMessage("Cuenta creada e ingreso correcto.", "success");
       } else {
         showMessage("Cuenta creada. Cargando tus datos...", "loading");
         try {
+          await wait(600);
           await refreshDashboard({ preserveShell: true });
-          showMessage("Cuenta creada e ingreso correcto.", "success");
+          if (providerState) {
+            showMessage("Cuenta creada e ingreso correcto.", "success");
+          } else {
+            showMessage("Tu cuenta fue creada, pero no pudimos abrir tu panel en este momento. Intenta actualizar nuevamente.", "error");
+          }
         } catch (error) {
           showMessage("Tu cuenta fue creada y tu sesi\u00f3n est\u00e1 activa, pero no pudimos cargar todo el panel en este momento. Intenta actualizar nuevamente.", "error");
         }
@@ -161,13 +166,18 @@ async function submitLogin(event) {
   try {
     const response = await api("providerLogin", payload);
     handleAuthenticatedResponse(response);
-    if (response.dashboard) {
+    if (response.dashboard && response.dashboard.found !== false) {
       showMessage("Ingreso correcto.", "success");
     } else {
       showMessage("Ingreso correcto. Cargando tus datos...", "loading");
       try {
+        await wait(600);
         await refreshDashboard({ preserveShell: true });
-        showMessage("Ingreso correcto.", "success");
+        if (providerState) {
+          showMessage("Ingreso correcto.", "success");
+        } else {
+          showMessage("Ingresaste correctamente, pero no pudimos abrir tu panel en este momento. Intenta actualizar nuevamente.", "error");
+        }
       } catch (error) {
         showMessage("Ingresaste correctamente, pero no pudimos cargar todo tu panel en este momento. Intenta actualizar nuevamente.", "error");
       }
@@ -243,8 +253,10 @@ function handleAuthenticatedResponse(response) {
   if (response.provider) {
     renderAuthenticatedShell(response.provider);
   }
-  if (response.dashboard) {
+  if (response.dashboard && response.dashboard.found !== false) {
     renderDashboard(response.dashboard);
+  } else if (response.dashboard && response.dashboard.found === false && response.provider) {
+    renderPersistentWarning(response.dashboard.message || "No pudimos abrir tu panel en este momento. Intenta actualizar nuevamente.");
   }
   document.getElementById("logoutButton").classList.remove("hidden");
 }
@@ -952,4 +964,10 @@ function escapeAttribute(value) {
   return String(value || "")
     .replace(/\\/g, "\\\\")
     .replace(/'/g, "\\'");
+}
+
+function wait(ms) {
+  return new Promise(function (resolve) {
+    setTimeout(resolve, ms);
+  });
 }
