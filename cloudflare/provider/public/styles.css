@@ -823,6 +823,106 @@ textarea:disabled,
   padding: var(--space-4);
 }
 
+.admin-shell {
+  padding-bottom: 72px;
+}
+
+.admin-topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.admin-topbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.admin-hero-card {
+  margin-top: 0;
+}
+
+.admin-hero-head {
+  align-items: end;
+}
+
+.admin-title {
+  max-width: 12ch;
+  margin: 12px 0;
+  font-size: 48px;
+  line-height: 0.98;
+}
+
+.admin-access-inline {
+  display: grid;
+  grid-template-columns: minmax(240px, 280px) auto;
+  gap: var(--space-2);
+  align-items: end;
+}
+
+.admin-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.metric-card strong {
+  display: block;
+  margin: 10px 0 8px;
+  font-size: 34px;
+  line-height: 1;
+  font-family: "Cormorant Garamond", serif;
+}
+
+.metric-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.admin-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.admin-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.admin-checkline {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.admin-checkline input {
+  width: auto;
+  min-height: auto;
+}
+
+.admin-list {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.admin-list-card p {
+  margin-bottom: 8px;
+}
+
+.admin-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+}
+
 .section-head {
   display: flex;
   justify-content: space-between;
@@ -967,6 +1067,12 @@ th {
     grid-template-columns: 1fr;
   }
 
+  .admin-grid,
+  .admin-form-grid,
+  .admin-metrics {
+    grid-template-columns: 1fr;
+  }
+
   .story-panel,
   .access-column {
     grid-column: auto;
@@ -978,6 +1084,16 @@ th {
 
   .access-shell {
     min-height: auto;
+  }
+
+  .admin-topbar,
+  .admin-hero-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .admin-access-inline {
+    grid-template-columns: 1fr;
   }
 
   .calendar-layout {
@@ -1083,6 +1199,14 @@ th {
   }
 
   .tab-button {
+    width: 100%;
+  }
+
+  .admin-actions {
+    flex-direction: column;
+  }
+
+  .admin-actions .button {
     width: 100%;
   }
 

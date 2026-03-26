@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel Supervisor | Grupo Santis</title>
+    <link rel="icon" type="image/svg+xml" href="./S.svg">
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <div class="page-shell admin-shell">
+      <header class="topbar admin-topbar">
+        <div class="brand-lockup">
+          <img class="brand-mark" src="./logo-santis.png" alt="Grupo Santis">
+          <div class="brand-copy">
+            <strong>PANEL INTERNO SANTIS</strong>
+            <small>Aprueba proveedores, valida citas y coordina excepciones de atenci&oacute;n en un solo tablero.</small>
+          </div>
+        </div>
+        <div class="admin-topbar-actions">
+          <a class="button subtle" href="./index.html">Ver portal proveedor</a>
+        </div>
+      </header>
+
+      <section class="dashboard-card admin-hero-card">
+        <div class="section-head admin-hero-head">
+          <div>
+            <span class="eyebrow">SUPERVISI&Oacute;N OPERATIVA</span>
+            <h1 class="admin-title">Control de proveedores y agenda</h1>
+            <p class="muted">Desde aqu&iacute; Freddy puede aprobar altas, revisar OCs asociadas, validar citas pendientes y reasignar atenciones sin depender del Apps Script visual.</p>
+          </div>
+          <div class="admin-access-inline">
+            <label>
+              Clave supervisor
+              <input id="accessKey" type="password" placeholder="SUPERVISOR_ACCESS_KEY">
+            </label>
+            <button id="loadDashboard" class="button primary" type="button" data-loading-text="Cargando...">Cargar panel</button>
+          </div>
+        </div>
+
+        <div id="message" class="message hidden"></div>
+
+        <div class="admin-metrics">
+          <article class="summary metric-card">
+            <span class="eyebrow">PROVEEDORES</span>
+            <strong id="providersMetric">0</strong>
+            <p>Pendientes de validaci&oacute;n</p>
+          </article>
+          <article class="summary metric-card">
+            <span class="eyebrow">CITAS</span>
+            <strong id="appointmentsMetric">0</strong>
+            <p>Pendientes de aprobaci&oacute;n</p>
+          </article>
+          <article class="summary metric-card">
+            <span class="eyebrow">OCS</span>
+            <strong id="ordersMetric">No</strong>
+            <p>Carga de OCs vigente</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="admin-grid">
+        <article class="dashboard-card">
+          <div class="section-head">
+            <div>
+              <span class="eyebrow">CITA MANUAL</span>
+              <h2>Crear cita aprobada</h2>
+            </div>
+          </div>
+          <form id="manualAppointmentForm" class="stack dense">
+            <div class="admin-form-grid">
+              <label>C&oacute;digo proveedor
+                <input name="vendorCode" required>
+              </label>
+              <label>Correo proveedor
+                <input name="email" type="email" required>
+              </label>
+              <label>Fecha y hora
+                <input name="startIso" type="datetime-local" required>
+              </label>
+              <label>OC
+                <input name="ocNumber">
+              </label>
+            </div>
+            <label>Observaciones
+              <textarea name="notes" rows="3"></textarea>
+            </label>
+            <label class="admin-checkline">
+              <input name="allowOutsideSchedule" type="checkbox">
+              Permitir fuera de horario habitual
+            </label>
+            <button type="submit" class="button secondary" data-loading-text="Creando...">Crear cita aprobada</button>
+          </form>
+        </article>
+
+        <article class="dashboard-card">
+          <div class="section-head">
+            <div>
+              <span class="eyebrow">ESTADO INTERNO</span>
+              <h2>Resumen del panel</h2>
+            </div>
+          </div>
+          <div id="panelSummary" class="stack dense">
+            <div class="note">
+              <p>Carga el panel con la clave de supervisor para consultar proveedores pendientes, citas y disponibilidad operativa.</p>
+            </div>
+          </div>
+        </article>
+      </section>
+
+      <section class="admin-grid">
+        <article class="dashboard-card">
+          <div class="section-head">
+            <div>
+              <span class="eyebrow">PROVEEDORES</span>
+              <h2>Pendientes de alta</h2>
+            </div>
+            <span id="providersCount" class="priority-badge">0</span>
+          </div>
+          <div id="providersPending" class="admin-list"></div>
+        </article>
+
+        <article class="dashboard-card">
+          <div class="section-head">
+            <div>
+              <span class="eyebrow">CITAS</span>
+              <h2>Pendientes de aprobaci&oacute;n</h2>
+            </div>
+            <span id="appointmentsCount" class="priority-badge">0</span>
+          </div>
+          <div id="appointmentsPending" class="admin-list"></div>
+        </article>
+      </section>
+
+      <section class="dashboard-card">
+        <div class="section-head">
+          <div>
+            <span class="eyebrow">CALENDARIO</span>
+            <h2>Disponibilidad operativa</h2>
+          </div>
+        </div>
+        <div id="calendar" class="calendar"></div>
+      </section>
+
+      <section class="dashboard-card">
+        <div class="section-head">
+          <div>
+            <span class="eyebrow">APROBADAS</span>
+            <h2>Citas recientes</h2>
+          </div>
+        </div>
+        <div id="approvedAppointments"></div>
+      </section>
+    </div>
+
+    <script src="./supervisor.js"></script>
+  </body>
+</html>

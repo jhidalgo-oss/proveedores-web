@@ -75,6 +75,9 @@ function errorForAction(action) {
     case "providerBootstrap":
     case "providerDashboard":
       return "No pudimos cargar la disponibilidad en este momento. Intenta nuevamente en unos minutos.";
+    case "supervisorBootstrap":
+    case "supervisorDashboard":
+      return "No pudimos cargar el panel interno en este momento. Intenta nuevamente en unos minutos.";
     case "lookupRegistrationByTaxId":
       return "No pudimos validar la OC en este momento. Intenta nuevamente en unos minutos.";
     case "lookupProviderReference":
@@ -85,6 +88,14 @@ function errorForAction(action) {
       return "No pudimos iniciar sesión en este momento. Intenta nuevamente en unos minutos.";
     case "requestAppointment":
       return "No pudimos registrar tu solicitud en este momento. Intenta nuevamente en unos minutos.";
+    case "approveProvider":
+    case "rejectProvider":
+      return "No pudimos actualizar el proveedor en este momento. Intenta nuevamente en unos minutos.";
+    case "approveAppointment":
+    case "rejectAppointment":
+    case "rescheduleAppointment":
+    case "createManualAppointment":
+      return "No pudimos actualizar la cita en este momento. Intenta nuevamente en unos minutos.";
     default:
       return "No se pudo completar la operación. Intenta nuevamente en unos minutos.";
   }

@@ -317,16 +317,24 @@ function routeApiAction_(action, payload) {
   switch (action) {
     case 'providerBootstrap':
       return getBootstrapData_('proveedor');
+    case 'supervisorBootstrap':
+      return getBootstrapData_('supervisor');
     case 'providerLogin':
       return providerLogin(payload);
     case 'providerDashboard':
       return getProviderDashboard(payload);
+    case 'supervisorDashboard':
+      return getSupervisorDashboard(payload);
     case 'lookupRegistrationByTaxId':
       return lookupRegistrationByTaxId(payload);
     case 'lookupProviderReference':
       return lookupProviderReference(payload);
     case 'registerProvider':
       return registerProvider(payload);
+    case 'approveProvider':
+      return approveProvider(payload);
+    case 'rejectProvider':
+      return rejectProvider(payload);
     case 'requestPasswordReset':
       return requestPasswordReset(payload);
     case 'resetPassword':
@@ -335,6 +343,14 @@ function routeApiAction_(action, payload) {
       return recoverEmailByTaxId(payload);
     case 'requestAppointment':
       return requestAppointment(payload);
+    case 'approveAppointment':
+      return approveAppointment(payload);
+    case 'rejectAppointment':
+      return rejectAppointment(payload);
+    case 'rescheduleAppointment':
+      return rescheduleAppointment(payload);
+    case 'createManualAppointment':
+      return createManualAppointment(payload);
     case 'health':
       return {
         service: 'proveedores-citas',
