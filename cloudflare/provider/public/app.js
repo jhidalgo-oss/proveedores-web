@@ -7,6 +7,7 @@ let selectedSlot = null;
 let appointmentsState = [];
 let pendingPurchaseOrdersState = [];
 let sessionToken = "";
+let sessionLoadSequence = 0;
 
 document.addEventListener("DOMContentLoaded", async function () {
   wireEvents();
@@ -64,12 +65,23 @@ async function restoreSession() {
   if (!storedToken) {
     return;
   }
+  const restoreSequence = ++sessionLoadSequence;
   sessionToken = storedToken;
   try {
-    await refreshDashboard({ resetOnMissing: true });
+    const data = await refreshDashboard({
+      resetOnMissing: true,
+      tokenSnapshot: storedToken,
+      loadSequence: restoreSequence
+    });
+    if (!hasRenderableDashboard(data) && sessionToken === storedToken && sessionLoadSequence === restoreSequence) {
+      clearSession();
+      resetProviderView();
+    }
   } catch (error) {
-    clearSession();
-    resetProviderView();
+    if (sessionToken === storedToken && sessionLoadSequence === restoreSequence) {
+      clearSession();
+      resetProviderView();
+    }
   }
 }
 
@@ -236,6 +248,7 @@ async function submitEmailRecovery(event) {
 }
 
 function handleAuthenticatedResponse(response) {
+  sessionLoadSequence += 1;
   sessionToken = response.sessionToken || "";
   if (sessionToken) {
     localStorage.setItem(SESSION_STORAGE_KEY, sessionToken);
@@ -266,6 +279,12 @@ async function refreshDashboard(options) {
 function renderDashboard(data, options) {
   options = options || {};
   if (!data.found) {
+    if (options.tokenSnapshot && sessionToken !== options.tokenSnapshot) {
+      return;
+    }
+    if (options.loadSequence && sessionLoadSequence !== options.loadSequence) {
+      return;
+    }
     if (options.preserveShell && providerState && sessionToken) {
       collapseDashboardPanels();
       renderPersistentWarning(data.message || "No pudimos terminar de cargar tu panel en este momento. Intenta actualizar nuevamente.");
