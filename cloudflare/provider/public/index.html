@@ -108,10 +108,10 @@
 
                   <form id="lookupForm" class="stack">
                     <label>Correo registrado
-                      <input name="email" type="email" required>
+                      <input name="email" type="email" autocomplete="username email" required>
                     </label>
                     <label>Contrase&ntilde;a
-                      <input name="password" type="password" required>
+                      <input name="password" type="password" autocomplete="current-password" required>
                     </label>
                     <button type="submit" class="button primary wide" data-loading-text="Ingresando...">Ingresar</button>
                   </form>
@@ -126,22 +126,22 @@
                     <p class="muted compact">Te enviaremos un c&oacute;digo de recuperaci&oacute;n al correo registrado.</p>
                     <form id="passwordRecoveryRequestForm" class="stack dense">
                       <label>Correo registrado
-                        <input name="email" type="email" required>
+                        <input name="email" type="email" autocomplete="email" required>
                       </label>
                       <button type="submit" class="button ghost wide" data-loading-text="Enviando...">Enviar c&oacute;digo</button>
                     </form>
                     <form id="passwordResetForm" class="stack dense top-gap">
                       <label>Correo registrado
-                        <input name="email" type="email" required>
+                        <input name="email" type="email" autocomplete="email" required>
                       </label>
                       <label>C&oacute;digo de recuperaci&oacute;n
-                        <input name="resetCode" required>
+                        <input name="resetCode" autocomplete="one-time-code" required>
                       </label>
                       <label>Nueva contrase&ntilde;a
-                        <input name="password" type="password" required>
+                        <input name="password" type="password" autocomplete="new-password" required>
                       </label>
                       <label>Confirmar contrase&ntilde;a
-                        <input name="passwordConfirm" type="password" required>
+                        <input name="passwordConfirm" type="password" autocomplete="new-password" required>
                       </label>
                       <button type="submit" class="button secondary wide" data-loading-text="Actualizando...">Actualizar contrase&ntilde;a</button>
                     </form>
@@ -152,7 +152,7 @@
                     <p class="muted compact">Ingresa tu RUC para consultar el correo asociado. Si necesitas cambiarlo, solo Grupo Santis puede hacerlo.</p>
                     <form id="emailRecoveryForm" class="stack dense">
                       <label>RUC
-                        <input name="taxId" inputmode="numeric" required>
+                        <input name="taxId" inputmode="numeric" autocomplete="off" required>
                       </label>
                       <button type="submit" class="button ghost wide" data-loading-text="Consultando...">Consultar correo</button>
                     </form>
@@ -186,7 +186,7 @@
 
                 <form id="registerForm" class="stack dense compact">
                   <label>OC
-                    <input name="ocNumber" inputmode="numeric" required>
+                    <input name="ocNumber" inputmode="numeric" autocomplete="off" required>
                   </label>
                   <div id="registerLookupStatus" class="helper-text"></div>
                   <div class="readonly-group">
@@ -195,19 +195,19 @@
                     <input name="vendorName" type="hidden">
                   </div>
                   <label>Nombre y Apellidos persona de contacto
-                    <input name="contactName">
+                    <input name="contactName" autocomplete="name">
                   </label>
                   <label>Tel&eacute;fono
-                    <input name="phone">
+                    <input name="phone" autocomplete="tel">
                   </label>
                   <label>Correo obligatorio
-                    <input name="email" type="email" required>
+                    <input name="email" type="email" autocomplete="email" required>
                   </label>
                   <label>Contrase&ntilde;a
-                    <input name="password" type="password" required>
+                    <input name="password" type="password" autocomplete="new-password" required>
                   </label>
                   <label>Confirmar contrase&ntilde;a
-                    <input name="passwordConfirm" type="password" required>
+                    <input name="passwordConfirm" type="password" autocomplete="new-password" required>
                   </label>
                   <p class="helper-text">El correo es obligatorio. Si m&aacute;s adelante necesitas cambiarlo, la actualizaci&oacute;n solo puede hacerla Grupo Santis.</p>
                   <button type="submit" class="button secondary wide" data-loading-text="Registrando...">Registrarme</button>

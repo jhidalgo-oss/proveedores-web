@@ -625,10 +625,11 @@ function togglePanel(panelId) {
 }
 
 function handleFormInvalid(event) {
-  if (!event.target || typeof event.target.reportValidity !== "function") {
+  if (!event.target) {
     return;
   }
-  showMessage("Revisa los campos obligatorios antes de continuar.", "error");
+  hideGlobalMessage();
+  showAccessValidationMessage(buildInvalidFieldMessage(event.target));
 }
 
 function getSubmitButton(event) {
@@ -776,6 +777,50 @@ function showMessage(text, type) {
       block: "nearest"
     });
   }
+}
+
+function hideGlobalMessage() {
+  const box = document.getElementById("message");
+  if (!box) {
+    return;
+  }
+  box.textContent = "";
+  box.className = "message hidden";
+}
+
+function showAccessValidationMessage(text) {
+  const box = document.getElementById("accessMessage");
+  if (!box) {
+    return;
+  }
+  box.textContent = text || "Revisa los campos obligatorios antes de continuar.";
+  box.className = "message error";
+}
+
+function buildInvalidFieldMessage(field) {
+  const labelText = getFieldLabelText(field);
+  if (!labelText) {
+    return "Revisa los campos obligatorios antes de continuar.";
+  }
+  return "Completa " + labelText + " para continuar.";
+}
+
+function getFieldLabelText(field) {
+  const label = field.closest("label");
+  if (!label) {
+    return "";
+  }
+
+  const parts = Array.from(label.childNodes)
+    .filter(function (node) {
+      return node.nodeType === Node.TEXT_NODE;
+    })
+    .map(function (node) {
+      return String(node.textContent || "").trim();
+    })
+    .filter(Boolean);
+
+  return parts.join(" ").replace(/\s+/g, " ").trim();
 }
 
 function activateTab(panelId) {
