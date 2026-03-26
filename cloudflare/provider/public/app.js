@@ -65,6 +65,7 @@ async function restoreSession() {
 async function submitRegistration(event) {
   event.preventDefault();
   const payload = formToObject(event.target);
+  const releaseBusy = setBusyState(getSubmitButton(event), true);
 
   try {
     const response = await api("registerProvider", payload);
@@ -76,6 +77,8 @@ async function submitRegistration(event) {
     document.getElementById("lookupForm").password.value = payload.password || "";
   } catch (error) {
     showMessage(error.message || "No pudimos completar tu registro en este momento. Intenta nuevamente en unos minutos.", "error");
+  } finally {
+    releaseBusy();
   }
 }
 
@@ -125,6 +128,7 @@ function resetRegistrationLookupState() {
 async function submitLogin(event) {
   event.preventDefault();
   const payload = formToObject(event.target);
+  const releaseBusy = setBusyState(getSubmitButton(event), true);
 
   try {
     const response = await api("providerLogin", payload);
@@ -132,24 +136,30 @@ async function submitLogin(event) {
     handleAuthenticatedResponse(response);
   } catch (error) {
     showMessage(error.message || "No pudimos iniciar sesi\u00f3n en este momento.", "error");
+  } finally {
+    releaseBusy();
   }
 }
 
 async function submitPasswordRecoveryRequest(event) {
   event.preventDefault();
   const payload = formToObject(event.target);
+  const releaseBusy = setBusyState(getSubmitButton(event), true);
 
   try {
     const response = await api("requestPasswordReset", payload);
     showMessage(response.message, "success");
   } catch (error) {
     showMessage(error.message || "No pudimos procesar la recuperaci\u00f3n en este momento.", "error");
+  } finally {
+    releaseBusy();
   }
 }
 
 async function submitPasswordReset(event) {
   event.preventDefault();
   const payload = formToObject(event.target);
+  const releaseBusy = setBusyState(getSubmitButton(event), true);
 
   try {
     const response = await api("resetPassword", payload);
@@ -161,12 +171,15 @@ async function submitPasswordReset(event) {
     activateTab("loginPanel");
   } catch (error) {
     showMessage(error.message || "No pudimos actualizar la contrase\u00f1a en este momento.", "error");
+  } finally {
+    releaseBusy();
   }
 }
 
 async function submitEmailRecovery(event) {
   event.preventDefault();
   const payload = formToObject(event.target);
+  const releaseBusy = setBusyState(getSubmitButton(event), true);
 
   try {
     const response = await api("recoverEmailByTaxId", payload);
@@ -176,6 +189,8 @@ async function submitEmailRecovery(event) {
     showMessage("Consulta realizada correctamente.", "success");
   } catch (error) {
     showMessage(error.message || "No pudimos recuperar el correo en este momento.", "error");
+  } finally {
+    releaseBusy();
   }
 }
 
@@ -425,6 +440,8 @@ async function requestAppointment() {
     return;
   }
 
+  const releaseBusy = setBusyState(document.getElementById("requestAppointmentButton"), true);
+
   try {
     const response = await api("requestAppointment", {
       sessionToken: sessionToken,
@@ -437,6 +454,8 @@ async function requestAppointment() {
     await refreshDashboard();
   } catch (error) {
     showMessage(error.message || "No pudimos registrar tu solicitud en este momento. Intenta nuevamente en unos minutos.", "error");
+  } finally {
+    releaseBusy();
   }
 }
 
@@ -455,6 +474,35 @@ function clearSession() {
 function togglePanel(panelId) {
   const panel = document.getElementById(panelId);
   panel.classList.toggle("hidden");
+}
+
+function getSubmitButton(event) {
+  return event.submitter || event.target.querySelector('button[type="submit"]');
+}
+
+function setBusyState(button, isBusy) {
+  if (!button) {
+    return function () {};
+  }
+
+  if (isBusy) {
+    if (!button.dataset.originalText) {
+      button.dataset.originalText = button.textContent;
+    }
+    button.disabled = true;
+    button.setAttribute("aria-busy", "true");
+    button.classList.add("is-loading");
+    button.textContent = button.dataset.loadingText || "Cargando...";
+    return function () {
+      setBusyState(button, false);
+    };
+  }
+
+  button.disabled = false;
+  button.removeAttribute("aria-busy");
+  button.classList.remove("is-loading");
+  button.textContent = button.dataset.originalText || button.textContent;
+  return function () {};
 }
 
 function showGeneratedCode(vendorCode) {

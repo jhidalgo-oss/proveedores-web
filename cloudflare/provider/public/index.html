@@ -110,7 +110,7 @@
                   <label>Contrase&ntilde;a
                     <input name="password" type="password" required>
                   </label>
-                  <button type="submit" class="button primary wide">Ingresar</button>
+                  <button type="submit" class="button primary wide" data-loading-text="Ingresando...">Ingresar</button>
                 </form>
 
                 <div class="inline-actions">
@@ -125,7 +125,7 @@
                     <label>Correo registrado
                       <input name="email" type="email" required>
                     </label>
-                    <button type="submit" class="button ghost wide">Enviar c&oacute;digo</button>
+                    <button type="submit" class="button ghost wide" data-loading-text="Enviando...">Enviar c&oacute;digo</button>
                   </form>
                   <form id="passwordResetForm" class="stack dense top-gap">
                     <label>Correo registrado
@@ -140,7 +140,7 @@
                     <label>Confirmar contrase&ntilde;a
                       <input name="passwordConfirm" type="password" required>
                     </label>
-                    <button type="submit" class="button secondary wide">Actualizar contrase&ntilde;a</button>
+                    <button type="submit" class="button secondary wide" data-loading-text="Actualizando...">Actualizar contrase&ntilde;a</button>
                   </form>
                 </div>
 
@@ -151,7 +151,7 @@
                     <label>RUC
                       <input name="taxId" inputmode="numeric" required>
                     </label>
-                    <button type="submit" class="button ghost wide">Consultar correo</button>
+                    <button type="submit" class="button ghost wide" data-loading-text="Consultando...">Consultar correo</button>
                   </form>
                   <div id="emailRecoveryResult" class="summary hidden"></div>
                 </div>
@@ -198,7 +198,7 @@
                     <input name="passwordConfirm" type="password" required>
                   </label>
                   <p class="helper-text">El correo es obligatorio. Si m&aacute;s adelante necesitas cambiarlo, la actualizaci&oacute;n solo puede hacerla Grupo Santis.</p>
-                  <button type="submit" class="button secondary wide">Registrarme</button>
+                  <button type="submit" class="button secondary wide" data-loading-text="Registrando...">Registrarme</button>
                 </form>
               </article>
             </div>
@@ -227,7 +227,7 @@
             <h2>Solicita una nueva cita</h2>
             <p class="muted">Horarios regulares: lunes a mi&eacute;rcoles de 08:00 a 16:00 y jueves a viernes de 08:00 a 12:30.</p>
           </div>
-          <button id="refreshCalendar" class="button ghost" type="button">Actualizar</button>
+          <button id="refreshCalendar" class="button ghost" type="button" data-loading-text="Actualizando...">Actualizar</button>
         </div>
 
         <div class="calendar-layout">
@@ -248,7 +248,7 @@
             <label>Notas
               <textarea id="appointmentNotes" rows="4" placeholder="Detalle de visita, carga, descarga o informaci&oacute;n adicional."></textarea>
             </label>
-            <button id="requestAppointmentButton" class="button primary wide" type="button">Solicitar cita</button>
+            <button id="requestAppointmentButton" class="button primary wide" type="button" data-loading-text="Solicitando...">Solicitar cita</button>
           </aside>
         </div>
       </section>

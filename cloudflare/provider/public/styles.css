@@ -608,6 +608,20 @@ textarea:disabled,
   box-shadow: 0 0 0 4px rgba(16, 61, 33, 0.08);
 }
 
+.button[aria-busy="true"] {
+  pointer-events: none;
+}
+
+.button.is-loading::after {
+  content: "";
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  animation: button-spin 0.7s linear infinite;
+}
+
 .button.primary {
   background: linear-gradient(135deg, var(--forest), #165a30);
   color: #fffaf2;
@@ -699,6 +713,12 @@ textarea:disabled,
   background: var(--danger-soft);
   border-color: rgba(139, 44, 44, 0.16);
   color: #7f2626;
+}
+
+@keyframes button-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .summary,
