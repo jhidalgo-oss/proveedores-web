@@ -655,6 +655,42 @@ textarea:disabled,
   cursor: pointer;
 }
 
+.support-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 46px;
+  margin-bottom: var(--space-3);
+  padding: 0 18px;
+  border-radius: var(--pill-radius);
+  border: 1px solid rgba(18, 140, 126, 0.16);
+  background: rgba(18, 140, 126, 0.1);
+  color: #0f5e54;
+  font-size: 15px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.helper-card {
+  margin-bottom: var(--space-3);
+  padding: var(--space-2);
+  border-radius: 18px;
+  border: 1px solid rgba(54, 41, 22, 0.08);
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.helper-head {
+  margin-bottom: 8px;
+}
+
+.helper-card h4 {
+  margin: 0;
+  font-family: "Manrope", sans-serif;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
 .inline-actions {
   display: flex;
   flex-wrap: wrap;

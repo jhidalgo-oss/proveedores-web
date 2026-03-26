@@ -323,6 +323,8 @@ function routeApiAction_(action, payload) {
       return getProviderDashboard(payload);
     case 'lookupRegistrationByTaxId':
       return lookupRegistrationByTaxId(payload);
+    case 'lookupProviderReference':
+      return lookupProviderReference(payload);
     case 'registerProvider':
       return registerProvider(payload);
     case 'requestPasswordReset':
@@ -1476,15 +1478,80 @@ function uniqueValues_(values) {
 }
 
 function getEligibleOpenOrdersForRegistration_(taxId, sapVendorCode) {
-  var vendorDigits = digitsOnly_(sapVendorCode);
+  var vendorCandidates = getVendorCodeCandidates_(sapVendorCode || taxId);
   var taxDigits = digitsOnly_(taxId);
   return summarizePurchaseOrders_(
     getSheetData_(APP_DEFAULTS.sheets.sapOpenOrders).filter(function(row) {
-      var sameVendor = vendorDigits && digitsOnly_(row.vendorCode) === vendorDigits;
+      var rowVendorCode = normalizeProviderIdentifier_(row.vendorCode);
+      var sameVendor = vendorCandidates.some(function(candidate) {
+        return candidate && candidate === rowVendorCode;
+      });
       var sameTaxId = taxDigits && digitsOnly_(row.taxId) === taxDigits;
       return isEligibleOpenOrderRow_(row) && (sameVendor || sameTaxId);
     })
   );
+}
+
+function lookupProviderReference(payload) {
+  ensureSheets_();
+  payload = payload || {};
+  var rawIdentifier = String(payload.identifier || payload.taxId || payload.ocNumber || payload.vendorCode || '').trim();
+  var normalizedIdentifier = normalizeProviderIdentifier_(rawIdentifier);
+  var identifierDigits = digitsOnly_(rawIdentifier);
+
+  if (!normalizedIdentifier && !identifierDigits) {
+    throw new Error('Ingresa un RUC, codigo proveedor u OC valida.');
+  }
+
+  var openOrders = summarizePurchaseOrders_(
+    getSheetData_(APP_DEFAULTS.sheets.sapOpenOrders).filter(function(row) {
+      var rowVendorCode = normalizeProviderIdentifier_(row.vendorCode);
+      var rowPoNumber = digitsOnly_(row.poNumber);
+      var rowTaxId = digitsOnly_(row.taxId);
+      var sameVendor = getVendorCodeCandidates_(rawIdentifier).some(function(candidate) {
+        return candidate && candidate === rowVendorCode;
+      });
+      var samePoNumber = identifierDigits && rowPoNumber === identifierDigits;
+      var sameTaxId = identifierDigits && rowTaxId === identifierDigits;
+      return isEligibleOpenOrderRow_(row) && (sameVendor || samePoNumber || sameTaxId);
+    })
+  );
+
+  if (!openOrders.length) {
+    return {
+      found: false,
+      vendorName: '',
+      sapVendorCode: '',
+      taxId: '',
+      poNumbers: [],
+      openOrders: 0,
+      matchedBy: '',
+      message: 'No encontramos OCs abiertas vigentes para ese RUC, codigo proveedor u OC.'
+    };
+  }
+
+  var first = openOrders[0];
+  var matchedBy = '';
+  if (identifierDigits && openOrders.some(function(item) { return digitsOnly_(item.poNumber) === identifierDigits; })) {
+    matchedBy = 'OC';
+  } else if (getVendorCodeCandidates_(rawIdentifier).some(function(candidate) {
+    return candidate && candidate === normalizeProviderIdentifier_(first.vendorCode);
+  })) {
+    matchedBy = 'VENDOR_CODE';
+  } else {
+    matchedBy = 'RUC';
+  }
+
+  return {
+    found: true,
+    vendorName: first.vendorName || '',
+    sapVendorCode: first.vendorCode || '',
+    taxId: first.taxId || '',
+    poNumbers: uniqueValues_(openOrders.map(function(item) { return item.poNumber; })),
+    openOrders: openOrders.length,
+    matchedBy: matchedBy,
+    message: 'Proveedor encontrado con OCs abiertas.'
+  };
 }
 
 function applyPurchaseOrderSnapshot_(appointment, openOrder) {
@@ -1664,6 +1731,26 @@ function sameText_(left, right) {
 
 function digitsOnly_(value) {
   return String(value || '').replace(/\D/g, '');
+}
+
+function normalizeProviderIdentifier_(value) {
+  return String(value || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+}
+
+function getVendorCodeCandidates_(value) {
+  var normalized = normalizeProviderIdentifier_(value);
+  var candidates = {};
+  if (!normalized) {
+    return [];
+  }
+  candidates[normalized] = true;
+  if (/^E\d+$/.test(normalized)) {
+    candidates['P' + normalized] = true;
+  }
+  if (/^PE\d+$/.test(normalized)) {
+    candidates[normalized.slice(1)] = true;
+  }
+  return Object.keys(candidates);
 }
 
 function trimToMinute_(value) {
@@ -1984,28 +2071,19 @@ function createAuthenticatedProviderResponse_(provider, startDate) {
 }
 
 function lookupRegistrationByTaxId(payload) {
-  ensureSheets_();
-  payload = payload || {};
-  var taxId = digitsOnly_(payload.taxId);
-  if (!taxId) {
-    throw new Error('Ingresa un RUC valido.');
+  var result = lookupProviderReference(payload);
+  if (!result.found) {
+    result.message = 'No tiene OCs abiertas en este momento. Cuando exista una OC pendiente podra registrarse.';
+    return result;
   }
-
-  var eligibleOpenOrders = getEligibleOpenOrdersForRegistration_(taxId, '');
-  if (!eligibleOpenOrders.length) {
-    return {
-      found: false,
-      vendorName: '',
-      openOrders: 0,
-      message: 'No tiene OCs abiertas en este momento. Cuando exista una OC pendiente podra registrarse.'
-    };
-  }
-
   return {
     found: true,
-    vendorName: eligibleOpenOrders[0].vendorName || '',
-    sapVendorCode: eligibleOpenOrders[0].vendorCode || '',
-    openOrders: eligibleOpenOrders.length,
+    vendorName: result.vendorName || '',
+    sapVendorCode: result.sapVendorCode || '',
+    taxId: result.taxId || '',
+    openOrders: result.openOrders || 0,
+    matchedBy: result.matchedBy || '',
+    poNumbers: result.poNumbers || [],
     message: 'Proveedor encontrado con OCs abiertas.'
   };
 }
@@ -2045,12 +2123,13 @@ function getProviderBySession_(sessionToken) {
 function normalizeProviderPayload_(payload) {
   payload = payload || {};
   var email = String(payload.email || '').trim().toLowerCase();
-  var taxId = digitsOnly_(payload.taxId);
-  var sapVendorCode = digitsOnly_(payload.sapVendorCode || '');
+  var identifier = String(payload.taxId || '').trim();
+  var taxId = digitsOnly_(identifier);
+  var sapVendorCode = normalizeProviderIdentifier_(payload.sapVendorCode || '');
   var password = String(payload.password || '').trim();
   var passwordConfirm = String(payload.passwordConfirm || '').trim();
 
-  if (!taxId) {
+  if (!taxId && !normalizeProviderIdentifier_(identifier)) {
     throw new Error('El RUC o documento es obligatorio.');
   }
   if (!email || !isValidEmail_(email)) {
@@ -2063,7 +2142,7 @@ function normalizeProviderPayload_(payload) {
 
   return {
     vendorName: String(payload.vendorName || '').trim(),
-    taxId: taxId,
+    taxId: taxId || identifier,
     sapVendorCode: sapVendorCode,
     contactName: String(payload.contactName || '').trim(),
     email: email,

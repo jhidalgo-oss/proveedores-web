@@ -20,7 +20,8 @@ function wireEvents() {
     "lookupForm",
     "passwordRecoveryRequestForm",
     "passwordResetForm",
-    "emailRecoveryForm"
+    "emailRecoveryForm",
+    "referenceLookupForm"
   ].forEach(function (formId) {
     document.getElementById(formId).addEventListener("invalid", handleFormInvalid, true);
   });
@@ -36,6 +37,7 @@ function wireEvents() {
   document.getElementById("passwordRecoveryRequestForm").addEventListener("submit", submitPasswordRecoveryRequest);
   document.getElementById("passwordResetForm").addEventListener("submit", submitPasswordReset);
   document.getElementById("emailRecoveryForm").addEventListener("submit", submitEmailRecovery);
+  document.getElementById("referenceLookupForm").addEventListener("submit", submitReferenceLookup);
   document.getElementById("refreshCalendar").addEventListener("click", refreshDashboard);
   document.getElementById("requestAppointmentButton").addEventListener("click", requestAppointment);
   document.getElementById("logoutButton").addEventListener("click", logout);
@@ -99,40 +101,43 @@ async function lookupRegistrationVendor() {
   const vendorNameInput = form.querySelector('input[name="vendorName"]');
   const vendorNameResult = document.getElementById("vendorNameResult");
   const status = document.getElementById("registerLookupStatus");
-  const digits = String(taxIdInput.value || "").replace(/\D/g, "");
+  const identifier = String(taxIdInput.value || "").trim();
 
-  if (!digits) {
+  if (!identifier) {
     vendorNameInput.value = "";
-    vendorNameResult.textContent = "Se completará al validar el RUC.";
+    vendorNameResult.textContent = "Se completará al validar la referencia.";
     status.textContent = "";
     return;
   }
 
-  status.textContent = "Validando RUC...";
+  status.textContent = "Validando referencia...";
 
   try {
-    const response = await api("lookupRegistrationByTaxId", { taxId: digits });
+    const response = await api("lookupRegistrationByTaxId", { taxId: identifier });
     if (!response.found) {
       vendorNameInput.value = "";
-      vendorNameResult.textContent = "No encontramos una razón social disponible para ese RUC.";
-      status.textContent = response.message || "No encontramos OCs abiertas para ese RUC.";
+      vendorNameResult.textContent = "No encontramos una razón social disponible para esa referencia.";
+      status.textContent = response.message || "No encontramos OCs abiertas para esa referencia.";
       return;
     }
 
+    if (response.taxId) {
+      taxIdInput.value = response.taxId;
+    }
     vendorNameInput.value = response.vendorName || "";
     vendorNameResult.textContent = response.vendorName || "Razón social encontrada.";
     status.textContent = "Razón social encontrada. OCs abiertas: " + String(response.openOrders || 0) + ".";
   } catch (error) {
     vendorNameInput.value = "";
-    vendorNameResult.textContent = "No pudimos validar el RUC en este momento.";
-    status.textContent = error.message || "No pudimos validar el RUC en este momento.";
+    vendorNameResult.textContent = "No pudimos validar la referencia en este momento.";
+    status.textContent = error.message || "No pudimos validar la referencia en este momento.";
   }
 }
 
 function resetRegistrationLookupState() {
   const form = document.getElementById("registerForm");
   form.querySelector('input[name="vendorName"]').value = "";
-  document.getElementById("vendorNameResult").textContent = "Se completará al validar el RUC.";
+  document.getElementById("vendorNameResult").textContent = "Se completará al validar la referencia.";
   document.getElementById("registerLookupStatus").textContent = "";
 }
 
@@ -204,6 +209,46 @@ async function submitEmailRecovery(event) {
     showMessage("Consulta realizada correctamente.", "success");
   } catch (error) {
     showMessage(error.message || "No pudimos recuperar el correo en este momento.", "error");
+  } finally {
+    releaseBusy();
+  }
+}
+
+async function submitReferenceLookup(event) {
+  event.preventDefault();
+  const payload = formToObject(event.target);
+  const releaseBusy = setBusyState(getSubmitButton(event), true);
+  showMessage("Consultando referencia SAP...", "loading");
+
+  try {
+    const response = await api("lookupProviderReference", payload);
+    const result = document.getElementById("referenceLookupResult");
+    result.classList.remove("hidden");
+
+    if (!response.found) {
+      result.innerHTML = "<p>" + escapeHtml(response.message) + "</p>";
+      showMessage(response.message, "error");
+      return;
+    }
+
+    result.innerHTML = [
+      "<p><strong>Razón social:</strong> " + escapeHtml(response.vendorName || "Sin dato") + "</p>",
+      "<p><strong>Código SAP:</strong> " + escapeHtml(response.sapVendorCode || "Sin dato") + "</p>",
+      "<p><strong>RUC:</strong> " + escapeHtml(response.taxId || "Sin dato") + "</p>",
+      "<p><strong>OCs abiertas:</strong> " + escapeHtml(String(response.openOrders || 0)) + "</p>"
+    ].join("");
+
+    const registerForm = document.getElementById("registerForm");
+    registerForm.querySelector('input[name="taxId"]').value = response.taxId || response.sapVendorCode || payload.identifier || "";
+    registerForm.querySelector('input[name="vendorName"]').value = response.vendorName || "";
+    document.getElementById("vendorNameResult").textContent = response.vendorName || "Razón social encontrada.";
+    document.getElementById("registerLookupStatus").textContent = "Referencia encontrada. OCs abiertas: " + String(response.openOrders || 0) + ".";
+    showMessage("Referencia encontrada correctamente.", "success");
+  } catch (error) {
+    const result = document.getElementById("referenceLookupResult");
+    result.classList.remove("hidden");
+    result.innerHTML = "<p>" + escapeHtml(error.message || "No pudimos consultar esa referencia en este momento.") + "</p>";
+    showMessage(error.message || "No pudimos consultar esa referencia en este momento.", "error");
   } finally {
     releaseBusy();
   }
@@ -695,6 +740,8 @@ function defaultActionError(action) {
     case "registerProvider":
     case "lookupRegistrationByTaxId":
       return "No pudimos validar tu registro en este momento. Intenta nuevamente en unos minutos.";
+    case "lookupProviderReference":
+      return "No pudimos consultar esa referencia en este momento. Intenta nuevamente en unos minutos.";
     case "providerLogin":
       return "No pudimos iniciar sesión en este momento. Intenta nuevamente en unos minutos.";
     case "requestAppointment":

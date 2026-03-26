@@ -77,6 +77,8 @@ function errorForAction(action) {
       return "No pudimos cargar la disponibilidad en este momento. Intenta nuevamente en unos minutos.";
     case "lookupRegistrationByTaxId":
       return "No pudimos validar el RUC en este momento. Intenta nuevamente en unos minutos.";
+    case "lookupProviderReference":
+      return "No pudimos validar la referencia en este momento. Intenta nuevamente en unos minutos.";
     case "registerProvider":
       return "No pudimos completar tu registro en este momento. Intenta nuevamente en unos minutos.";
     case "providerLogin":
