@@ -1009,7 +1009,7 @@ function validateSlotRequest_(dateTime) {
     throw new Error('Las citas de proveedor solo pueden pedirse dentro del horario habil.');
   }
   if (!isBusinessDay_(dateTime)) {
-    throw new Error('Solo se atiende de lunes a viernes.');
+    throw new Error('Solo se atiende de lunes a sabado.');
   }
   if (dateTime < makeDateTime_(formatDate_(new Date()), 0, 0)) {
     throw new Error('No se pueden solicitar citas en el pasado.');
@@ -1022,7 +1022,7 @@ function validateSlotRequest_(dateTime) {
 
 function validateSupervisorSlot_(dateTime, allowOutsideSchedule) {
   if (!isBusinessDay_(dateTime) && !allowOutsideSchedule) {
-    throw new Error('Fuera de lunes a viernes solo se permite si marcas fuera de horario.');
+    throw new Error('Fuera de lunes a sabado solo se permite si marcas fuera de horario.');
   }
   if (!isWithinSchedule_(dateTime) && !allowOutsideSchedule) {
     throw new Error('Ese horario esta fuera del rango normal. Activa la excepcion para coordinarlo.');
@@ -1710,6 +1710,9 @@ function getScheduleForDate_(date) {
   if (day >= 1 && day <= 3) {
     return { startHour: 8, startMinute: 0, endHour: 16, endMinute: 0 };
   }
+  if (day === 6) {
+    return { startHour: 8, startMinute: 0, endHour: 11, endMinute: 0 };
+  }
   return { startHour: 8, startMinute: 0, endHour: 12, endMinute: 30 };
 }
 
@@ -1725,7 +1728,7 @@ function isWithinSchedule_(date) {
 
 function isBusinessDay_(date) {
   var day = date.getDay();
-  return day >= 1 && day <= 5;
+  return day >= 1 && day <= 6;
 }
 
 function formatDate_(date) {
