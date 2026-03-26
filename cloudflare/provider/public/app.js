@@ -7,12 +7,12 @@ let selectedSlot = null;
 let appointmentsState = [];
 let pendingPurchaseOrdersState = [];
 let sessionToken = "";
-let sessionLoadSequence = 0;
 
 document.addEventListener("DOMContentLoaded", async function () {
   wireEvents();
   await loadBootstrap();
-  await restoreSession();
+  clearSession();
+  resetProviderView();
 });
 
 function wireEvents() {
@@ -60,31 +60,6 @@ async function loadBootstrap() {
   }
 }
 
-async function restoreSession() {
-  const storedToken = localStorage.getItem(SESSION_STORAGE_KEY) || "";
-  if (!storedToken) {
-    return;
-  }
-  const restoreSequence = ++sessionLoadSequence;
-  sessionToken = storedToken;
-  try {
-    const data = await refreshDashboard({
-      resetOnMissing: true,
-      tokenSnapshot: storedToken,
-      loadSequence: restoreSequence
-    });
-    if (!hasRenderableDashboard(data) && sessionToken === storedToken && sessionLoadSequence === restoreSequence) {
-      clearSession();
-      resetProviderView();
-    }
-  } catch (error) {
-    if (sessionToken === storedToken && sessionLoadSequence === restoreSequence) {
-      clearSession();
-      resetProviderView();
-    }
-  }
-}
-
 async function submitRegistration(event) {
   event.preventDefault();
   const payload = formToObject(event.target);
@@ -102,13 +77,9 @@ async function submitRegistration(event) {
       if (hasRenderableDashboard(response.dashboard)) {
         showMessage("Cuenta creada e ingreso correcto.", "success");
       } else {
-        showMessage("Cuenta creada. Cargando tus datos...", "loading");
-        const loaded = await loadDashboardWithRetry();
-        if (loaded) {
-          showMessage("Cuenta creada e ingreso correcto.", "success");
-        } else {
-          showMessage("Tu cuenta fue creada y tu sesi\u00f3n est\u00e1 activa, pero no pudimos cargar todo el panel en este momento. Intenta actualizar nuevamente.", "error");
-        }
+        clearSession();
+        resetProviderView();
+        showMessage("Tu cuenta fue creada, pero no pudimos abrir tu panel en este momento. Intenta nuevamente.", "error");
       }
       return;
     }
@@ -176,13 +147,9 @@ async function submitLogin(event) {
     if (hasRenderableDashboard(response.dashboard)) {
       showMessage("Ingreso correcto.", "success");
     } else {
-      showMessage("Ingreso correcto. Cargando tus datos...", "loading");
-      const loaded = await loadDashboardWithRetry();
-      if (loaded) {
-        showMessage("Ingreso correcto.", "success");
-      } else {
-        showMessage("Ingresaste correctamente, pero no pudimos cargar todo tu panel en este momento. Intenta actualizar nuevamente.", "error");
-      }
+      clearSession();
+      resetProviderView();
+      showMessage("No pudimos abrir tu panel en este momento. Intenta nuevamente.", "error");
     }
   } catch (error) {
     showMessage(error.message || "No pudimos iniciar sesi\u00f3n en este momento.", "error");
@@ -248,7 +215,6 @@ async function submitEmailRecovery(event) {
 }
 
 function handleAuthenticatedResponse(response) {
-  sessionLoadSequence += 1;
   sessionToken = response.sessionToken || "";
   if (sessionToken) {
     localStorage.setItem(SESSION_STORAGE_KEY, sessionToken);
@@ -279,12 +245,6 @@ async function refreshDashboard(options) {
 function renderDashboard(data, options) {
   options = options || {};
   if (!data.found) {
-    if (options.tokenSnapshot && sessionToken !== options.tokenSnapshot) {
-      return;
-    }
-    if (options.loadSequence && sessionLoadSequence !== options.loadSequence) {
-      return;
-    }
     if (options.preserveShell && providerState && sessionToken) {
       collapseDashboardPanels();
       renderPersistentWarning(data.message || "No pudimos terminar de cargar tu panel en este momento. Intenta actualizar nuevamente.");
@@ -299,6 +259,7 @@ function renderDashboard(data, options) {
   }
 
   activateTab("loginPanel");
+  setAccessAuthenticatedMode(true);
   providerState = data.provider;
   appointmentsState = data.appointments || [];
   pendingPurchaseOrdersState = data.pendingPurchaseOrders || [];
@@ -974,30 +935,6 @@ function escapeAttribute(value) {
     .replace(/'/g, "\\'");
 }
 
-function wait(ms) {
-  return new Promise(function (resolve) {
-    setTimeout(resolve, ms);
-  });
-}
-
 function hasRenderableDashboard(dashboard) {
   return Boolean(dashboard && dashboard.found === true && dashboard.provider);
-}
-
-async function loadDashboardWithRetry() {
-  const delays = [400, 900, 1600, 2400];
-
-  for (let index = 0; index < delays.length; index += 1) {
-    await wait(delays[index]);
-    try {
-      const data = await refreshDashboard({ preserveShell: true });
-      if (hasRenderableDashboard(data)) {
-        return true;
-      }
-    } catch (error) {
-      // seguimos intentando mientras la sesión ya exista
-    }
-  }
-
-  return false;
 }
