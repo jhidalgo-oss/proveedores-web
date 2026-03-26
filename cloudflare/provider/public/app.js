@@ -87,19 +87,14 @@ async function submitRegistration(event) {
     document.getElementById("lookupForm").email.value = payload.email || "";
     document.getElementById("lookupForm").password.value = payload.password || "";
     if (response.provider && response.provider.registrationStatus === "APROBADO") {
-      if (response.dashboard && response.dashboard.found !== false) {
+      if (hasRenderableDashboard(response.dashboard)) {
         showMessage("Cuenta creada e ingreso correcto.", "success");
       } else {
         showMessage("Cuenta creada. Cargando tus datos...", "loading");
-        try {
-          await wait(600);
-          await refreshDashboard({ preserveShell: true });
-          if (providerState) {
-            showMessage("Cuenta creada e ingreso correcto.", "success");
-          } else {
-            showMessage("Tu cuenta fue creada, pero no pudimos abrir tu panel en este momento. Intenta actualizar nuevamente.", "error");
-          }
-        } catch (error) {
+        const loaded = await loadDashboardWithRetry();
+        if (loaded) {
+          showMessage("Cuenta creada e ingreso correcto.", "success");
+        } else {
           showMessage("Tu cuenta fue creada y tu sesi\u00f3n est\u00e1 activa, pero no pudimos cargar todo el panel en este momento. Intenta actualizar nuevamente.", "error");
         }
       }
@@ -166,19 +161,14 @@ async function submitLogin(event) {
   try {
     const response = await api("providerLogin", payload);
     handleAuthenticatedResponse(response);
-    if (response.dashboard && response.dashboard.found !== false) {
+    if (hasRenderableDashboard(response.dashboard)) {
       showMessage("Ingreso correcto.", "success");
     } else {
       showMessage("Ingreso correcto. Cargando tus datos...", "loading");
-      try {
-        await wait(600);
-        await refreshDashboard({ preserveShell: true });
-        if (providerState) {
-          showMessage("Ingreso correcto.", "success");
-        } else {
-          showMessage("Ingresaste correctamente, pero no pudimos abrir tu panel en este momento. Intenta actualizar nuevamente.", "error");
-        }
-      } catch (error) {
+      const loaded = await loadDashboardWithRetry();
+      if (loaded) {
+        showMessage("Ingreso correcto.", "success");
+      } else {
         showMessage("Ingresaste correctamente, pero no pudimos cargar todo tu panel en este momento. Intenta actualizar nuevamente.", "error");
       }
     }
@@ -253,10 +243,8 @@ function handleAuthenticatedResponse(response) {
   if (response.provider) {
     renderAuthenticatedShell(response.provider);
   }
-  if (response.dashboard && response.dashboard.found !== false) {
+  if (hasRenderableDashboard(response.dashboard)) {
     renderDashboard(response.dashboard);
-  } else if (response.dashboard && response.dashboard.found === false && response.provider) {
-    renderPersistentWarning(response.dashboard.message || "No pudimos abrir tu panel en este momento. Intenta actualizar nuevamente.");
   }
   document.getElementById("logoutButton").classList.remove("hidden");
 }
@@ -264,7 +252,7 @@ function handleAuthenticatedResponse(response) {
 async function refreshDashboard(options) {
   options = options || {};
   if (!sessionToken) {
-    return;
+    return null;
   }
 
   const data = await api("providerDashboard", {
@@ -272,6 +260,7 @@ async function refreshDashboard(options) {
     startDate: boot && boot.today ? boot.today : null
   });
   renderDashboard(data, options);
+  return data;
 }
 
 function renderDashboard(data, options) {
@@ -970,4 +959,26 @@ function wait(ms) {
   return new Promise(function (resolve) {
     setTimeout(resolve, ms);
   });
+}
+
+function hasRenderableDashboard(dashboard) {
+  return Boolean(dashboard && dashboard.found === true && dashboard.provider);
+}
+
+async function loadDashboardWithRetry() {
+  const delays = [400, 900, 1600, 2400];
+
+  for (let index = 0; index < delays.length; index += 1) {
+    await wait(delays[index]);
+    try {
+      const data = await refreshDashboard({ preserveShell: true });
+      if (hasRenderableDashboard(data)) {
+        return true;
+      }
+    } catch (error) {
+      // seguimos intentando mientras la sesión ya exista
+    }
+  }
+
+  return false;
 }
