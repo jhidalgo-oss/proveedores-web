@@ -77,7 +77,7 @@
           <p id="accessHint" class="muted">Si configuraste la propiedad <code>SUPERVISOR_ACCESS_KEY</code>, ingresala aqui para habilitar el panel.</p>
           <div class="inline">
             <input id="accessKey" type="password" placeholder="Clave supervisor">
-            <button id="loadDashboard" class="button primary" type="button">Cargar panel</button>
+            <button id="loadDashboard" class="button primary" type="button" data-loading-text="Cargando...">Cargar panel</button>
           </div>
         </article>
 
@@ -145,6 +145,12 @@
       applyBrand();
       applyAccessHint();
       document.getElementById('loadDashboard').addEventListener('click', loadDashboard);
+      document.getElementById('accessKey').addEventListener('keydown', function(event) {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          loadDashboard();
+        }
+      });
       document.getElementById('manualAppointmentForm').addEventListener('submit', submitManualAppointment);
       if (!(BOOT && BOOT.config && BOOT.config.supervisorProtected)) {
         loadDashboard();
@@ -168,16 +174,19 @@
           showMessage('Ingresa la clave de supervisor para continuar.', 'error');
           return;
         }
+        const release = setBusyState(document.getElementById('loadDashboard'), true);
+        showMessage('Cargando panel interno...', 'loading');
         runServer('getSupervisorDashboard', {
           accessKey: accessKey,
           startDate: BOOT.today
         }, function(data) {
+          release();
           if (!data) {
             showMessage('No pudimos cargar el panel interno. Intenta nuevamente.', 'error');
             return;
           }
           renderDashboard(data);
-        });
+        }, release);
       }
 
       function submitManualAppointment(event) {
@@ -384,12 +393,34 @@
         });
       }
 
-      function runServer(method, payload, onSuccess) {
+      function runServer(method, payload, onSuccess, onFinally) {
         google.script.run
           .withSuccessHandler(onSuccess)
           .withFailureHandler(function(error) {
+            if (typeof onFinally === 'function') {
+              onFinally();
+            }
             showMessage(error.message || 'Ocurrio un error.', 'error');
           })[method](payload);
+      }
+
+      function setBusyState(button, isBusy) {
+        if (!button) {
+          return function() {};
+        }
+        if (isBusy) {
+          if (!button.dataset.originalText) {
+            button.dataset.originalText = button.textContent;
+          }
+          button.disabled = true;
+          button.textContent = button.dataset.loadingText || 'Cargando...';
+          return function() {
+            setBusyState(button, false);
+          };
+        }
+        button.disabled = false;
+        button.textContent = button.dataset.originalText || button.textContent;
+        return function() {};
       }
 
       function formToObject(form) {
