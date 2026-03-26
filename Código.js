@@ -1477,9 +1477,11 @@ function uniqueValues_(values) {
   });
 }
 
-function getEligibleOpenOrdersForRegistration_(taxId, sapVendorCode) {
-  var vendorCandidates = getVendorCodeCandidates_(sapVendorCode || taxId);
-  var taxDigits = digitsOnly_(taxId);
+function getEligibleOpenOrdersForRegistration_(referenceValue, sapVendorCode) {
+  var rawReference = String(referenceValue || '').trim();
+  var vendorCandidates = getVendorCodeCandidates_(sapVendorCode || rawReference);
+  var taxDigits = digitsOnly_(rawReference);
+  var poDigits = digitsOnly_(rawReference);
   return summarizePurchaseOrders_(
     getSheetData_(APP_DEFAULTS.sheets.sapOpenOrders).filter(function(row) {
       var rowVendorCode = normalizeProviderIdentifier_(row.vendorCode);
@@ -1487,7 +1489,8 @@ function getEligibleOpenOrdersForRegistration_(taxId, sapVendorCode) {
         return candidate && candidate === rowVendorCode;
       });
       var sameTaxId = taxDigits && digitsOnly_(row.taxId) === taxDigits;
-      return isEligibleOpenOrderRow_(row) && (sameVendor || sameTaxId);
+      var samePoNumber = poDigits && digitsOnly_(row.poNumber) === poDigits;
+      return isEligibleOpenOrderRow_(row) && (sameVendor || sameTaxId || samePoNumber);
     })
   );
 }
@@ -1835,14 +1838,14 @@ function providerLogin(payload) {
 function registerProvider(payload) {
   ensureSheets_();
   var clean = normalizeProviderPayload_(payload);
-  var eligibleOpenOrders = getEligibleOpenOrdersForRegistration_(clean.taxId, clean.sapVendorCode);
+  var eligibleOpenOrders = getEligibleOpenOrdersForRegistration_(clean.referenceValue, clean.sapVendorCode);
   if (!eligibleOpenOrders.length) {
     throw new Error('No tiene OCs abiertas en este momento. Cuando exista una OC pendiente podra registrarse y solicitar su cita.');
   }
   var primaryOpenOrder = eligibleOpenOrders[0];
 
   var existing = findProvider_({
-    taxId: clean.taxId,
+    taxId: primaryOpenOrder.taxId,
     sapVendorCode: primaryOpenOrder.vendorCode,
     email: clean.email
   });
@@ -1861,11 +1864,11 @@ function registerProvider(payload) {
   record.vendorCode = record.vendorCode || generateProviderCode_();
   record.sapVendorCode = primaryOpenOrder.vendorCode || clean.sapVendorCode;
   record.vendorName = primaryOpenOrder.vendorName || clean.vendorName;
-  record.taxId = clean.taxId;
+  record.taxId = primaryOpenOrder.taxId || clean.taxId;
   record.contactName = clean.contactName;
   record.email = clean.email;
   record.phone = clean.phone;
-  record.ocNumber = primaryOpenOrder.poNumber || record.ocNumber || '';
+  record.ocNumber = primaryOpenOrder.poNumber || clean.ocNumber || record.ocNumber || '';
   record.sapStatus = 'OC_ABIERTA_VIGENTE';
   record.createdAt = record.createdAt || now;
   record.updatedAt = now;
@@ -2073,7 +2076,7 @@ function createAuthenticatedProviderResponse_(provider, startDate) {
 function lookupRegistrationByTaxId(payload) {
   var result = lookupProviderReference(payload);
   if (!result.found) {
-    result.message = 'No tiene OCs abiertas en este momento. Cuando exista una OC pendiente podra registrarse.';
+    result.message = 'No encontramos una razon social disponible para esa OC.';
     return result;
   }
   return {
@@ -2081,6 +2084,7 @@ function lookupRegistrationByTaxId(payload) {
     vendorName: result.vendorName || '',
     sapVendorCode: result.sapVendorCode || '',
     taxId: result.taxId || '',
+    ocNumber: result.poNumbers && result.poNumbers.length ? result.poNumbers[0] : '',
     openOrders: result.openOrders || 0,
     matchedBy: result.matchedBy || '',
     poNumbers: result.poNumbers || [],
@@ -2123,14 +2127,13 @@ function getProviderBySession_(sessionToken) {
 function normalizeProviderPayload_(payload) {
   payload = payload || {};
   var email = String(payload.email || '').trim().toLowerCase();
-  var identifier = String(payload.taxId || '').trim();
-  var taxId = digitsOnly_(identifier);
+  var referenceValue = String(payload.ocNumber || payload.taxId || '').trim();
   var sapVendorCode = normalizeProviderIdentifier_(payload.sapVendorCode || '');
   var password = String(payload.password || '').trim();
   var passwordConfirm = String(payload.passwordConfirm || '').trim();
 
-  if (!taxId && !normalizeProviderIdentifier_(identifier)) {
-    throw new Error('El RUC o documento es obligatorio.');
+  if (!referenceValue) {
+    throw new Error('La OC es obligatoria.');
   }
   if (!email || !isValidEmail_(email)) {
     throw new Error('Debes registrar un correo valido.');
@@ -2142,8 +2145,10 @@ function normalizeProviderPayload_(payload) {
 
   return {
     vendorName: String(payload.vendorName || '').trim(),
-    taxId: taxId || identifier,
+    taxId: '',
     sapVendorCode: sapVendorCode,
+    referenceValue: referenceValue,
+    ocNumber: digitsOnly_(referenceValue),
     contactName: String(payload.contactName || '').trim(),
     email: email,
     phone: String(payload.phone || '').trim(),

@@ -175,31 +175,14 @@
                 </div>
                 <p class="muted section-copy">Tu c&oacute;digo se genera autom&aacute;ticamente. Completa tus datos y deja un correo v&aacute;lido para futuras coordinaciones.</p>
 
-                <div class="helper-card">
-                  <div class="card-head helper-head">
-                    <div>
-                      <span class="eyebrow">AUTOAYUDA</span>
-                      <h4>Consulta tu referencia SAP</h4>
-                    </div>
-                  </div>
-                  <p class="muted compact">Ingresa tu RUC, c&oacute;digo proveedor SAP u OC y te mostraremos la raz&oacute;n social y el c&oacute;digo correcto para registrarte.</p>
-                  <form id="referenceLookupForm" class="stack dense">
-                    <label>RUC, c&oacute;digo proveedor u OC
-                      <input name="identifier" required>
-                    </label>
-                    <button type="submit" class="button ghost wide" data-loading-text="Consultando...">Consultar referencia</button>
-                  </form>
-                  <div id="referenceLookupResult" class="summary hidden"></div>
-                </div>
-
                 <form id="registerForm" class="stack dense compact">
-                  <label>RUC o documento
-                    <input name="taxId" required>
+                  <label>OC
+                    <input name="ocNumber" inputmode="numeric" required>
                   </label>
                   <div id="registerLookupStatus" class="helper-text"></div>
                   <div class="readonly-group">
                     <span class="field-label">Raz&oacute;n social</span>
-                    <div id="vendorNameResult" class="readonly-field">Se completar&aacute; al validar el RUC.</div>
+                    <div id="vendorNameResult" class="readonly-field">Se completar&aacute; al validar la OC.</div>
                     <input name="vendorName" type="hidden">
                   </div>
                   <label>Nombre y Apellidos persona de contacto
