@@ -74,7 +74,7 @@
       <section class="grid two">
         <article class="card">
           <h2>Acceso</h2>
-          <p class="muted">Si configuraste la propiedad <code>SUPERVISOR_ACCESS_KEY</code>, ingresala aqui para habilitar el panel.</p>
+          <p id="accessHint" class="muted">Si configuraste la propiedad <code>SUPERVISOR_ACCESS_KEY</code>, ingresala aqui para habilitar el panel.</p>
           <div class="inline">
             <input id="accessKey" type="password" placeholder="Clave supervisor">
             <button id="loadDashboard" class="button primary" type="button">Cargar panel</button>
@@ -143,15 +143,41 @@
 
     <script>
       applyBrand();
+      applyAccessHint();
       document.getElementById('loadDashboard').addEventListener('click', loadDashboard);
       document.getElementById('manualAppointmentForm').addEventListener('submit', submitManualAppointment);
+      if (!(BOOT && BOOT.config && BOOT.config.supervisorProtected)) {
+        loadDashboard();
+      }
+
+      function applyAccessHint() {
+        const hint = document.getElementById('accessHint');
+        if (!hint) {
+          return;
+        }
+        if (BOOT && BOOT.config && BOOT.config.supervisorProtected) {
+          hint.innerHTML = 'Este panel esta protegido. Ingresa la clave definida en <code>SUPERVISOR_ACCESS_KEY</code> para habilitar el tablero.';
+          return;
+        }
+        hint.textContent = 'Este panel no tiene clave adicional configurada. Puedes cargar el tablero directamente.';
+      }
 
       function loadDashboard() {
-        accessKey = document.getElementById('accessKey').value;
+        accessKey = String(document.getElementById('accessKey').value || '').trim();
+        if (BOOT && BOOT.config && BOOT.config.supervisorProtected && !accessKey) {
+          showMessage('Ingresa la clave de supervisor para continuar.', 'error');
+          return;
+        }
         runServer('getSupervisorDashboard', {
           accessKey: accessKey,
           startDate: BOOT.today
-        }, renderDashboard);
+        }, function(data) {
+          if (!data) {
+            showMessage('No pudimos cargar el panel interno. Intenta nuevamente.', 'error');
+            return;
+          }
+          renderDashboard(data);
+        });
       }
 
       function submitManualAppointment(event) {
@@ -168,6 +194,10 @@
       }
 
       function renderDashboard(data) {
+        if (!data || typeof data !== 'object') {
+          showMessage('No pudimos cargar el panel interno. Verifica la clave e intenta nuevamente.', 'error');
+          return;
+        }
         renderPendingProviders(data.pendingProviders || []);
         renderPendingAppointments(data.pendingAppointments || []);
         renderApprovedAppointments(data.approvedAppointments || []);
