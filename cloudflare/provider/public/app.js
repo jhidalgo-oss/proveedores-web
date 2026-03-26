@@ -87,12 +87,16 @@ async function submitRegistration(event) {
     document.getElementById("lookupForm").email.value = payload.email || "";
     document.getElementById("lookupForm").password.value = payload.password || "";
     if (response.provider && response.provider.registrationStatus === "APROBADO") {
-      showMessage("Cuenta creada. Cargando tus datos...", "loading");
-      try {
-        await refreshDashboard({ preserveShell: true });
+      if (response.dashboard) {
         showMessage("Cuenta creada e ingreso correcto.", "success");
-      } catch (error) {
-        showMessage("Tu cuenta fue creada y tu sesi\u00f3n est\u00e1 activa, pero no pudimos cargar todo el panel en este momento. Intenta actualizar nuevamente.", "error");
+      } else {
+        showMessage("Cuenta creada. Cargando tus datos...", "loading");
+        try {
+          await refreshDashboard({ preserveShell: true });
+          showMessage("Cuenta creada e ingreso correcto.", "success");
+        } catch (error) {
+          showMessage("Tu cuenta fue creada y tu sesi\u00f3n est\u00e1 activa, pero no pudimos cargar todo el panel en este momento. Intenta actualizar nuevamente.", "error");
+        }
       }
       return;
     }
@@ -157,12 +161,16 @@ async function submitLogin(event) {
   try {
     const response = await api("providerLogin", payload);
     handleAuthenticatedResponse(response);
-    showMessage("Ingreso correcto. Cargando tus datos...", "loading");
-    try {
-      await refreshDashboard({ preserveShell: true });
+    if (response.dashboard) {
       showMessage("Ingreso correcto.", "success");
-    } catch (error) {
-      showMessage("Ingresaste correctamente, pero no pudimos cargar todo tu panel en este momento. Intenta actualizar nuevamente.", "error");
+    } else {
+      showMessage("Ingreso correcto. Cargando tus datos...", "loading");
+      try {
+        await refreshDashboard({ preserveShell: true });
+        showMessage("Ingreso correcto.", "success");
+      } catch (error) {
+        showMessage("Ingresaste correctamente, pero no pudimos cargar todo tu panel en este momento. Intenta actualizar nuevamente.", "error");
+      }
     }
   } catch (error) {
     showMessage(error.message || "No pudimos iniciar sesi\u00f3n en este momento.", "error");

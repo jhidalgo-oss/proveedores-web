@@ -1900,7 +1900,21 @@ function providerLogin(payload) {
   if (!verifyPassword_(clean.password, provider.passwordSalt, provider.passwordHash)) {
     throw new Error('La contrasena no es correcta.');
   }
-  return createAuthenticatedProviderResponse_(provider);
+  var response = createAuthenticatedProviderResponse_(provider);
+  try {
+    response.dashboard = buildProviderDashboardResponse_(provider, formatDate_(new Date()));
+  } catch (error) {
+    response.dashboard = {
+      found: true,
+      provider: cleanRow_(provider),
+      warnings: ['Tu sesi\u00f3n fue iniciada, pero no pudimos cargar todo el panel en este momento.'],
+      pendingPurchaseOrders: [],
+      appointments: [],
+      canRequestAppointments: false,
+      calendar: null
+    };
+  }
+  return response;
 }
 
 function registerProvider(payload) {
@@ -1956,6 +1970,21 @@ function registerProvider(payload) {
   audit_('PROVEEDOR_REGISTRO', record.providerId, record.email, 'Proveedor registrado con cuenta y contrasena.');
 
   var authResponse = createAuthenticatedProviderResponse_(record);
+  if (record.registrationStatus === PROVIDER_STATUS.APPROVED) {
+    try {
+      authResponse.dashboard = buildProviderDashboardResponse_(record, formatDate_(new Date()));
+    } catch (error) {
+      authResponse.dashboard = {
+        found: true,
+        provider: cleanRow_(record),
+        warnings: ['Tu cuenta fue activada, pero no pudimos cargar todo el panel en este momento.'],
+        pendingPurchaseOrders: [],
+        appointments: [],
+        canRequestAppointments: false,
+        calendar: null
+      };
+    }
+  }
   authResponse.message = record.registrationStatus === PROVIDER_STATUS.APPROVED
     ? 'Tu cuenta fue activada correctamente. Ya puedes solicitar citas.'
     : 'Tu cuenta fue creada. Grupo Santis validara y autorizara tu alta antes de solicitar citas.';
