@@ -282,9 +282,10 @@ function renderCalendar(calendar) {
       day.slots.forEach(function (slot) {
         const node = document.createElement("div");
         node.className = "slot slot-" + String(slot.status || "available").toLowerCase();
+        node.title = buildCalendarSlotTitle(slot);
         node.innerHTML = [
-          "<span>" + escapeHtml(slot.label || "") + "</span>",
-          "<strong>" + escapeHtml(slot.vendorName || "Disponible") + "</strong>"
+          '<span class="slot-time">' + escapeHtml(slot.label || "") + "</span>",
+          '<span class="slot-indicator" aria-hidden="true"></span>'
         ].join("");
         slots.appendChild(node);
       });
@@ -293,6 +294,19 @@ function renderCalendar(calendar) {
     card.appendChild(slots);
     wrapper.appendChild(card);
   });
+}
+
+function buildCalendarSlotTitle(slot) {
+  const status = String(slot.status || "AVAILABLE").toUpperCase();
+  const vendor = String(slot.vendorName || "").trim();
+
+  if (status === "APPROVED") {
+    return (slot.label || "") + " | Aprobado" + (vendor ? " | " + vendor : "");
+  }
+  if (status === "PENDING") {
+    return (slot.label || "") + " | Pendiente de aprobación" + (vendor ? " | " + vendor : "");
+  }
+  return (slot.label || "") + " | Disponible";
 }
 
 function createActionButton(label, className, handler, loadingText) {
