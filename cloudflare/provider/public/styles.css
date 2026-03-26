@@ -944,6 +944,111 @@ textarea:disabled,
   gap: 14px;
 }
 
+.provider-agenda {
+  display: grid;
+  gap: 18px;
+}
+
+.agenda-week {
+  border: 1px solid rgba(54, 41, 22, 0.08);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.72);
+  padding: 14px;
+}
+
+.agenda-week-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.agenda-week-head p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.35;
+  font-weight: 600;
+}
+
+.agenda-grid {
+  display: grid;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.agenda-corner,
+.agenda-day-head,
+.agenda-time,
+.agenda-cell {
+  min-width: 0;
+}
+
+.agenda-corner,
+.agenda-time {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: rgba(16, 61, 33, 0.06);
+  color: var(--forest);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.agenda-day-head {
+  display: grid;
+  gap: 2px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(54, 41, 22, 0.08);
+}
+
+.agenda-day-head strong {
+  font-size: 13px;
+  line-height: 1.25;
+}
+
+.agenda-day-head span {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.25;
+}
+
+.agenda-cell {
+  display: flex;
+  align-items: center;
+}
+
+.agenda-empty {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 32px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px dashed rgba(54, 41, 22, 0.08);
+  color: var(--muted-soft);
+  font-size: 12px;
+}
+
+.agenda-slot {
+  justify-content: center;
+  width: 100%;
+  min-height: 34px;
+  padding: 8px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.15;
+  text-align: center;
+ }
+
 .day-card {
   padding: 14px;
   border-radius: 16px;
@@ -1145,6 +1250,10 @@ th {
 
   .request-box {
     position: static;
+  }
+
+  .agenda-grid {
+    overflow-x: auto;
   }
 }
 

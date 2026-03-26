@@ -397,47 +397,136 @@ function formatQuantity(value, uom) {
 function renderCalendar(calendar) {
   const wrapper = document.getElementById("calendar");
   wrapper.innerHTML = "";
+  wrapper.classList.add("provider-agenda");
 
-  calendar.days.forEach(function (day) {
-    const card = document.createElement("article");
-    card.className = "day-card";
-    card.innerHTML = [
-      '<div class="day-head">',
-      "<h3>" + escapeHtml(day.weekday) + "</h3>",
-      "<p>" + escapeHtml(day.date) + "</p>",
-      "</div>"
+  groupCalendarWeeks(calendar.days || []).forEach(function (week) {
+    const weekNode = document.createElement("section");
+    weekNode.className = "agenda-week";
+
+    const head = document.createElement("div");
+    head.className = "agenda-week-head";
+    head.innerHTML = [
+      "<span class=\"eyebrow\">SEMANA</span>",
+      "<p>" + escapeHtml(week.label) + "</p>"
     ].join("");
+    weekNode.appendChild(head);
 
-    const slots = document.createElement("div");
-    slots.className = "slots";
+    const grid = document.createElement("div");
+    grid.className = "agenda-grid";
+    grid.style.gridTemplateColumns = "88px repeat(" + week.days.length + ", minmax(0, 1fr))";
 
-    if (!day.slots.length) {
-      const empty = document.createElement("p");
-      empty.className = "muted";
-      empty.textContent = "Sin atenci\u00f3n ese d\u00eda";
-      slots.appendChild(empty);
-    } else {
-      day.slots.forEach(function (slot) {
+    const corner = document.createElement("div");
+    corner.className = "agenda-corner";
+    corner.textContent = "Hora";
+    grid.appendChild(corner);
+
+    week.days.forEach(function (day) {
+      const dayHead = document.createElement("div");
+      dayHead.className = "agenda-day-head";
+      dayHead.innerHTML = [
+        "<strong>" + escapeHtml(day.weekday) + "</strong>",
+        "<span>" + escapeHtml(day.date) + "</span>"
+      ].join("");
+      grid.appendChild(dayHead);
+    });
+
+    buildWeekTimeRows(week.days).forEach(function (row) {
+      const timeCell = document.createElement("div");
+      timeCell.className = "agenda-time";
+      timeCell.textContent = row.timeLabel;
+      grid.appendChild(timeCell);
+
+      week.days.forEach(function (day) {
+        const slot = row.byDate[day.date] || null;
+        const cell = document.createElement("div");
+        cell.className = "agenda-cell";
+
+        if (!slot) {
+          cell.innerHTML = '<span class="agenda-empty">-</span>';
+          grid.appendChild(cell);
+          return;
+        }
+
         const button = document.createElement("button");
         button.type = "button";
-        button.className = "slot slot-" + slot.status.toLowerCase();
+        button.className = "slot agenda-slot slot-" + String(slot.status || "available").toLowerCase();
         button.disabled = !slot.isSelectable;
-        button.innerHTML = "<span>" + escapeHtml(slot.label) + "</span>";
+        button.innerHTML = "<span>" + escapeHtml(getAgendaSlotLabel(slot)) + "</span>";
+        if (selectedSlot && selectedSlot.startIso === slot.startIso) {
+          button.classList.add("selected");
+        }
         button.addEventListener("click", function () {
           selectedSlot = slot;
           document.getElementById("selectedSlotLabel").textContent = slot.startIso + " (" + slot.label + ")";
-          document.querySelectorAll(".slot.selected").forEach(function (node) {
+          document.querySelectorAll(".agenda-slot.selected").forEach(function (node) {
             node.classList.remove("selected");
           });
           button.classList.add("selected");
         });
-        slots.appendChild(button);
+        cell.appendChild(button);
+        grid.appendChild(cell);
       });
-    }
+    });
 
-    card.appendChild(slots);
-    wrapper.appendChild(card);
+    weekNode.appendChild(grid);
+    wrapper.appendChild(weekNode);
   });
+}
+
+function groupCalendarWeeks(days) {
+  const weeks = [];
+  for (let index = 0; index < days.length; index += 7) {
+    const weekDays = days.slice(index, index + 7);
+    if (!weekDays.length) {
+      continue;
+    }
+    weeks.push({
+      days: weekDays,
+      label: weekDays[0].date + " al " + weekDays[weekDays.length - 1].date
+    });
+  }
+  return weeks;
+}
+
+function buildWeekTimeRows(days) {
+  const rowMap = {};
+
+  days.forEach(function (day) {
+    (day.slots || []).forEach(function (slot) {
+      const timeKey = getSlotTimeKey(slot.startIso);
+      if (!rowMap[timeKey]) {
+        rowMap[timeKey] = {
+          timeKey: timeKey,
+          timeLabel: timeKey,
+          byDate: {}
+        };
+      }
+      rowMap[timeKey].byDate[day.date] = slot;
+    });
+  });
+
+  return Object.keys(rowMap)
+    .sort()
+    .map(function (key) {
+      return rowMap[key];
+    });
+}
+
+function getSlotTimeKey(startIso) {
+  return String(startIso || "").slice(11, 16);
+}
+
+function getAgendaSlotLabel(slot) {
+  if (slot.status === "AVAILABLE") {
+    return "Disponible";
+  }
+  if (slot.status === "PENDING") {
+    return "Pendiente";
+  }
+  if (slot.status === "APPROVED") {
+    return "Tomado";
+  }
+  return slot.label || "";
 }
 
 function renderAppointments(appointments) {
