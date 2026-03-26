@@ -627,9 +627,22 @@ function formToObject(form) {
 }
 
 function showMessage(text, type) {
-  const box = document.getElementById("message");
-  box.textContent = text;
-  box.className = "message " + type;
+  ["message", "accessMessage"].forEach(function (id) {
+    const box = document.getElementById(id);
+    if (!box) {
+      return;
+    }
+    box.textContent = text;
+    box.className = "message " + type;
+  });
+
+  const accessBox = document.getElementById("accessMessage");
+  if (accessBox && typeof accessBox.scrollIntoView === "function") {
+    accessBox.scrollIntoView({
+      behavior: "smooth",
+      block: "nearest"
+    });
+  }
 }
 
 function activateTab(panelId) {
@@ -644,6 +657,14 @@ function activateTab(panelId) {
     panel.classList.toggle("is-active", isActive);
     panel.hidden = !isActive;
   });
+
+  const panel = document.getElementById(panelId);
+  if (panel && typeof panel.scrollIntoView === "function") {
+    panel.scrollIntoView({
+      behavior: "smooth",
+      block: "start"
+    });
+  }
 }
 
 function normalizeUserError(message, action) {
