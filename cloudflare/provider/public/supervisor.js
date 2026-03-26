@@ -146,7 +146,7 @@ function renderPendingProviders(items) {
         accessKey: accessKey,
         notes: notes
       });
-    }));
+    }, "Aprobando..."));
 
     actions.appendChild(createActionButton("Rechazar", "button subtle", async function () {
       const notes = window.prompt("Motivo de rechazo:", "");
@@ -158,7 +158,7 @@ function renderPendingProviders(items) {
         accessKey: accessKey,
         notes: notes
       });
-    }));
+    }, "Rechazando..."));
 
     card.appendChild(actions);
     wrapper.appendChild(card);
@@ -195,7 +195,7 @@ function renderPendingAppointments(items) {
         accessKey: accessKey,
         notes: notes
       });
-    }));
+    }, "Aprobando..."));
 
     actions.appendChild(createActionButton("Reasignar", "button secondary", async function () {
       const startIso = window.prompt("Nueva fecha y hora en formato YYYY-MM-DDTHH:MM", (item.effectiveStart || "").slice(0, 16));
@@ -212,7 +212,7 @@ function renderPendingAppointments(items) {
         approveAfter: true,
         notes: notes
       });
-    }));
+    }, "Reasignando..."));
 
     actions.appendChild(createActionButton("Rechazar", "button subtle", async function () {
       const notes = window.prompt("Motivo de rechazo:", "");
@@ -224,7 +224,7 @@ function renderPendingAppointments(items) {
         accessKey: accessKey,
         notes: notes
       });
-    }));
+    }, "Rechazando..."));
 
     card.appendChild(actions);
     wrapper.appendChild(card);
@@ -295,15 +295,21 @@ function renderCalendar(calendar) {
   });
 }
 
-function createActionButton(label, className, handler) {
+function createActionButton(label, className, handler, loadingText) {
   const button = document.createElement("button");
   button.type = "button";
   button.className = className;
   button.textContent = label;
-  button.addEventListener("click", function () {
-    Promise.resolve(handler()).catch(function (error) {
+  button.dataset.loadingText = loadingText || "Procesando...";
+  button.addEventListener("click", async function () {
+    const releaseBusy = setBusyState(button, true);
+    try {
+      await Promise.resolve(handler());
+    } catch (error) {
       showMessage(error.message || "No pudimos completar la acci\u00f3n.", "error");
-    });
+    } finally {
+      releaseBusy();
+    }
   });
   return button;
 }
