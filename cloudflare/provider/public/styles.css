@@ -709,6 +709,12 @@ textarea:disabled,
   color: #1e5b3b;
 }
 
+.message.loading {
+  background: rgba(16, 61, 33, 0.08);
+  border-color: rgba(16, 61, 33, 0.14);
+  color: var(--forest);
+}
+
 .message.error {
   background: var(--danger-soft);
   border-color: rgba(139, 44, 44, 0.16);

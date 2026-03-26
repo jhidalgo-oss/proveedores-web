@@ -15,6 +15,16 @@ document.addEventListener("DOMContentLoaded", async function () {
 });
 
 function wireEvents() {
+  [
+    "registerForm",
+    "lookupForm",
+    "passwordRecoveryRequestForm",
+    "passwordResetForm",
+    "emailRecoveryForm"
+  ].forEach(function (formId) {
+    document.getElementById(formId).addEventListener("invalid", handleFormInvalid, true);
+  });
+
   document.querySelectorAll("[data-tab-target]").forEach(function (button) {
     button.addEventListener("click", function () {
       activateTab(button.getAttribute("data-tab-target"));
@@ -66,6 +76,7 @@ async function submitRegistration(event) {
   event.preventDefault();
   const payload = formToObject(event.target);
   const releaseBusy = setBusyState(getSubmitButton(event), true);
+  showMessage("Procesando tu registro...", "loading");
 
   try {
     const response = await api("registerProvider", payload);
@@ -129,6 +140,7 @@ async function submitLogin(event) {
   event.preventDefault();
   const payload = formToObject(event.target);
   const releaseBusy = setBusyState(getSubmitButton(event), true);
+  showMessage("Validando tu acceso...", "loading");
 
   try {
     const response = await api("providerLogin", payload);
@@ -145,6 +157,7 @@ async function submitPasswordRecoveryRequest(event) {
   event.preventDefault();
   const payload = formToObject(event.target);
   const releaseBusy = setBusyState(getSubmitButton(event), true);
+  showMessage("Enviando solicitud de recuperacion...", "loading");
 
   try {
     const response = await api("requestPasswordReset", payload);
@@ -160,6 +173,7 @@ async function submitPasswordReset(event) {
   event.preventDefault();
   const payload = formToObject(event.target);
   const releaseBusy = setBusyState(getSubmitButton(event), true);
+  showMessage("Actualizando tu contrasena...", "loading");
 
   try {
     const response = await api("resetPassword", payload);
@@ -180,6 +194,7 @@ async function submitEmailRecovery(event) {
   event.preventDefault();
   const payload = formToObject(event.target);
   const releaseBusy = setBusyState(getSubmitButton(event), true);
+  showMessage("Consultando tu correo asociado...", "loading");
 
   try {
     const response = await api("recoverEmailByTaxId", payload);
@@ -441,6 +456,7 @@ async function requestAppointment() {
   }
 
   const releaseBusy = setBusyState(document.getElementById("requestAppointmentButton"), true);
+  showMessage("Registrando tu solicitud de cita...", "loading");
 
   try {
     const response = await api("requestAppointment", {
@@ -474,6 +490,13 @@ function clearSession() {
 function togglePanel(panelId) {
   const panel = document.getElementById(panelId);
   panel.classList.toggle("hidden");
+}
+
+function handleFormInvalid(event) {
+  if (!event.target || typeof event.target.reportValidity !== "function") {
+    return;
+  }
+  showMessage("Revisa los campos obligatorios antes de continuar.", "error");
 }
 
 function getSubmitButton(event) {
