@@ -66,9 +66,10 @@ async function restoreSession() {
   }
   sessionToken = storedToken;
   try {
-    await refreshDashboard();
+    await refreshDashboard({ resetOnMissing: true });
   } catch (error) {
     clearSession();
+    resetProviderView();
   }
 }
 
@@ -87,10 +88,15 @@ async function submitRegistration(event) {
     document.getElementById("lookupForm").password.value = payload.password || "";
     if (response.provider && response.provider.registrationStatus === "APROBADO") {
       showMessage("Cuenta creada. Cargando tus datos...", "loading");
-      await refreshDashboard();
-    } else {
-      showMessage(response.message, "success");
+      try {
+        await refreshDashboard({ preserveShell: true });
+        showMessage("Cuenta creada e ingreso correcto.", "success");
+      } catch (error) {
+        showMessage("Tu cuenta fue creada y tu sesi\u00f3n est\u00e1 activa, pero no pudimos cargar todo el panel en este momento. Intenta actualizar nuevamente.", "error");
+      }
+      return;
     }
+    showMessage(response.message, "success");
   } catch (error) {
     showMessage(error.message || "No pudimos completar tu registro en este momento. Intenta nuevamente en unos minutos.", "error");
   } finally {
@@ -152,8 +158,12 @@ async function submitLogin(event) {
     const response = await api("providerLogin", payload);
     handleAuthenticatedResponse(response);
     showMessage("Ingreso correcto. Cargando tus datos...", "loading");
-    await refreshDashboard();
-    showMessage("Ingreso correcto.", "success");
+    try {
+      await refreshDashboard({ preserveShell: true });
+      showMessage("Ingreso correcto.", "success");
+    } catch (error) {
+      showMessage("Ingresaste correctamente, pero no pudimos cargar todo tu panel en este momento. Intenta actualizar nuevamente.", "error");
+    }
   } catch (error) {
     showMessage(error.message || "No pudimos iniciar sesi\u00f3n en este momento.", "error");
   } finally {
@@ -231,7 +241,8 @@ function handleAuthenticatedResponse(response) {
   document.getElementById("logoutButton").classList.remove("hidden");
 }
 
-async function refreshDashboard() {
+async function refreshDashboard(options) {
+  options = options || {};
   if (!sessionToken) {
     return;
   }
@@ -240,11 +251,19 @@ async function refreshDashboard() {
     sessionToken: sessionToken,
     startDate: boot && boot.today ? boot.today : null
   });
-  renderDashboard(data);
+  renderDashboard(data, options);
 }
 
-function renderDashboard(data) {
+function renderDashboard(data, options) {
+  options = options || {};
   if (!data.found) {
+    if (options.preserveShell && providerState && sessionToken) {
+      collapseDashboardPanels();
+      renderPersistentWarning(data.message || "No pudimos terminar de cargar tu panel en este momento. Intenta actualizar nuevamente.");
+      showMessage("Tu sesi\u00f3n sigue activa, pero no pudimos cargar todo el panel en este momento. Intenta actualizar nuevamente.", "error");
+      return;
+    }
+
     clearSession();
     resetProviderView();
     showMessage(data.message || "No encontramos tu cuenta.", "error");
@@ -304,6 +323,7 @@ function renderAuthenticatedShell(provider) {
     "<p><strong>" + escapeHtml(provider.vendorName || "") + "</strong></p>",
     "<p>C\u00f3digo de proveedor: " + escapeHtml(provider.vendorCode || "") + " | Correo: " + escapeHtml(provider.email || "") + "</p>"
   ].join("");
+  renderPersistentWarning("");
 }
 
 function renderPendingPurchaseOrders() {
@@ -585,7 +605,11 @@ async function requestAppointment() {
       notes: document.getElementById("appointmentNotes").value
     });
     showMessage(response.message, "success");
-    await refreshDashboard();
+    try {
+      await refreshDashboard({ preserveShell: true });
+    } catch (error) {
+      showMessage(response.message + " Si no ves el cambio de inmediato, actualiza el panel nuevamente.", "success");
+    }
   } catch (error) {
     showMessage(error.message || "No pudimos registrar tu solicitud en este momento. Intenta nuevamente en unos minutos.", "error");
   } finally {
@@ -849,6 +873,34 @@ function resetProviderView() {
   document.getElementById("appointmentOcSearch").value = "";
   document.getElementById("appointmentOcSummary").classList.add("hidden");
   document.getElementById("appointmentOcSummary").innerHTML = "";
+  renderPersistentWarning("");
+}
+
+function collapseDashboardPanels() {
+  appointmentsState = [];
+  pendingPurchaseOrdersState = [];
+  selectedSlot = null;
+  document.getElementById("appointmentPanel").classList.add("hidden");
+  document.getElementById("appointmentsHistory").classList.add("hidden");
+  document.getElementById("appointmentOc").innerHTML = '<option value="">Selecciona una OC abierta</option>';
+  document.getElementById("appointmentOcSearch").value = "";
+  document.getElementById("appointmentOcSummary").classList.add("hidden");
+  document.getElementById("appointmentOcSummary").innerHTML = "";
+}
+
+function renderPersistentWarning(message) {
+  const warnings = document.getElementById("warnings");
+  if (!warnings) {
+    return;
+  }
+  warnings.innerHTML = "";
+  if (!message) {
+    return;
+  }
+  const node = document.createElement("div");
+  node.className = "note";
+  node.textContent = message;
+  warnings.appendChild(node);
 }
 
 function escapeHtml(value) {
