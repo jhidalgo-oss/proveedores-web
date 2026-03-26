@@ -87,6 +87,7 @@ SHEET_HEADERS[APP_DEFAULTS.sheets.appointments] = [
   'requestedEnd',
   'effectiveStart',
   'effectiveEnd',
+  'durationMinutes',
   'slotDate',
   'slotLabel',
   'appointmentStatus',
@@ -505,15 +506,17 @@ function approveAppointment(payload) {
 
   var targetStart = payload.startIso ? parseLocalDateTime_(payload.startIso) : parseLocalDateTime_(appointment.effectiveStart);
   var allowOutside = payload.allowOutsideSchedule === true;
-  validateSupervisorSlot_(targetStart, allowOutside);
-  assertSlotAvailable_(formatDateTime_(targetStart), appointment.appointmentId);
+  var durationMinutes = normalizeDurationMinutes_(payload.durationMinutes || appointment.durationMinutes || getRuntimeConfig_().slotMinutes);
+  validateSupervisorSlot_(targetStart, durationMinutes, allowOutside);
+  var slotEnd = addMinutes_(targetStart, durationMinutes);
+  assertTimeRangeAvailable_(targetStart, slotEnd, appointment.appointmentId);
 
-  var slotEnd = addMinutes_(targetStart, getRuntimeConfig_().slotMinutes);
   appointment.effectiveStart = formatDateTime_(targetStart);
   appointment.effectiveEnd = formatDateTime_(slotEnd);
+  appointment.durationMinutes = String(durationMinutes);
   appointment.slotDate = formatDate_(targetStart);
   appointment.slotLabel = formatSlotLabel_(targetStart, slotEnd);
-  appointment.outsideSchedule = isWithinSchedule_(targetStart) ? 'NO' : 'SI';
+  appointment.outsideSchedule = isWithinSchedule_(targetStart, durationMinutes) ? 'NO' : 'SI';
   appointment.appointmentStatus = APPOINTMENT_STATUS.APPROVED;
   appointment.approvedAt = nowIso_();
   appointment.approvedBy = getApproverName_();
@@ -561,15 +564,17 @@ function rescheduleAppointment(payload) {
 
   var targetStart = parseLocalDateTime_(payload.startIso);
   var allowOutside = payload.allowOutsideSchedule === true;
-  validateSupervisorSlot_(targetStart, allowOutside);
-  assertSlotAvailable_(formatDateTime_(targetStart), appointment.appointmentId);
+  var durationMinutes = normalizeDurationMinutes_(payload.durationMinutes || appointment.durationMinutes || getRuntimeConfig_().slotMinutes);
+  validateSupervisorSlot_(targetStart, durationMinutes, allowOutside);
+  var slotEnd = addMinutes_(targetStart, durationMinutes);
+  assertTimeRangeAvailable_(targetStart, slotEnd, appointment.appointmentId);
 
-  var slotEnd = addMinutes_(targetStart, getRuntimeConfig_().slotMinutes);
   appointment.effectiveStart = formatDateTime_(targetStart);
   appointment.effectiveEnd = formatDateTime_(slotEnd);
+  appointment.durationMinutes = String(durationMinutes);
   appointment.slotDate = formatDate_(targetStart);
   appointment.slotLabel = formatSlotLabel_(targetStart, slotEnd);
-  appointment.outsideSchedule = isWithinSchedule_(targetStart) ? 'NO' : 'SI';
+  appointment.outsideSchedule = isWithinSchedule_(targetStart, durationMinutes) ? 'NO' : 'SI';
   appointment.notes = appendNote_(appointment.notes, payload.notes || 'Cita reasignada por supervisor.');
 
   if (payload.approveAfter === true || appointment.appointmentStatus === APPOINTMENT_STATUS.APPROVED) {
@@ -613,10 +618,11 @@ function createManualAppointment(payload) {
 
   var targetStart = parseLocalDateTime_(clean.startIso);
   var allowOutside = payload.allowOutsideSchedule === true;
-  validateSupervisorSlot_(targetStart, allowOutside);
-  assertSlotAvailable_(formatDateTime_(targetStart), '');
+  var durationMinutes = normalizeDurationMinutes_(clean.durationMinutes || getRuntimeConfig_().slotMinutes);
+  validateSupervisorSlot_(targetStart, durationMinutes, allowOutside);
+  var slotEnd = addMinutes_(targetStart, durationMinutes);
+  assertTimeRangeAvailable_(targetStart, slotEnd, '');
 
-  var slotEnd = addMinutes_(targetStart, getRuntimeConfig_().slotMinutes);
   var appointment = {
     appointmentId: nextId_('CIT'),
     providerId: provider.providerId,
@@ -635,10 +641,11 @@ function createManualAppointment(payload) {
     requestedEnd: formatDateTime_(slotEnd),
     effectiveStart: formatDateTime_(targetStart),
     effectiveEnd: formatDateTime_(slotEnd),
+    durationMinutes: String(durationMinutes),
     slotDate: formatDate_(targetStart),
     slotLabel: formatSlotLabel_(targetStart, slotEnd),
     appointmentStatus: APPOINTMENT_STATUS.APPROVED,
-    outsideSchedule: isWithinSchedule_(targetStart) ? 'NO' : 'SI',
+    outsideSchedule: isWithinSchedule_(targetStart, durationMinutes) ? 'NO' : 'SI',
     requestedAt: nowIso_(),
     approvedAt: nowIso_(),
     approvedBy: getApproverName_(),
@@ -899,23 +906,17 @@ function buildCalendar_(startDateText, days, includeDetails) {
       return row.appointmentStatus === APPOINTMENT_STATUS.PENDING || row.appointmentStatus === APPOINTMENT_STATUS.APPROVED;
     })
     .filter(function(row) {
-      return Boolean(tryParseLocalDateTime_(row.effectiveStart));
+      return Boolean(tryParseLocalDateTime_(row.effectiveStart)) && Boolean(tryParseLocalDateTime_(row.effectiveEnd));
     });
-  var byStart = {};
-
-  appointments.forEach(function(row) {
-    var key = row.effectiveStart;
-    if (!byStart[key] || row.appointmentStatus === APPOINTMENT_STATUS.APPROVED) {
-      byStart[key] = row;
-    }
-  });
 
   var calendar = [];
   for (var dayIndex = 0; dayIndex < days; dayIndex += 1) {
     var currentDate = addDays_(startDate, dayIndex);
     var isoDate = formatDate_(currentDate);
     var slots = generateSlotsForDate_(currentDate).map(function(slot) {
-      var appointment = byStart[slot.startIso];
+      var slotStart = tryParseLocalDateTime_(slot.startIso);
+      var slotEnd = tryParseLocalDateTime_(slot.endIso);
+      var appointment = getOverlappingAppointment_(appointments, slotStart, slotEnd);
       var state = appointment
         ? (appointment.appointmentStatus === APPOINTMENT_STATUS.APPROVED ? 'APPROVED' : 'PENDING')
         : 'AVAILABLE';
@@ -937,9 +938,6 @@ function buildCalendar_(startDateText, days, includeDetails) {
         return row.slotDate === isoDate && row.outsideSchedule === 'SI';
       })
       .forEach(function(row) {
-        if (!byStart[row.effectiveStart]) {
-          return;
-        }
         var start = tryParseLocalDateTime_(row.effectiveStart);
         var end = tryParseLocalDateTime_(row.effectiveEnd);
         if (!start || !end) {
@@ -1003,9 +1001,10 @@ function generateSlotsForDate_(date) {
   return slots;
 }
 
-function validateSlotRequest_(dateTime) {
+function validateSlotRequest_(dateTime, durationMinutes) {
   var config = getRuntimeConfig_();
-  if (!isWithinSchedule_(dateTime)) {
+  var targetDuration = Number(durationMinutes || config.slotMinutes);
+  if (!isWithinSchedule_(dateTime, targetDuration)) {
     throw new Error('Las citas de proveedor solo pueden pedirse dentro del horario habil.');
   }
   if (!isBusinessDay_(dateTime)) {
@@ -1020,27 +1019,41 @@ function validateSlotRequest_(dateTime) {
   }
 }
 
-function validateSupervisorSlot_(dateTime, allowOutsideSchedule) {
+function validateSupervisorSlot_(dateTime, durationMinutes, allowOutsideSchedule) {
   if (!isBusinessDay_(dateTime) && !allowOutsideSchedule) {
     throw new Error('Fuera de lunes a sabado solo se permite si marcas fuera de horario.');
   }
-  if (!isWithinSchedule_(dateTime) && !allowOutsideSchedule) {
+  if (!isWithinSchedule_(dateTime, durationMinutes) && !allowOutsideSchedule) {
     throw new Error('Ese horario esta fuera del rango normal. Activa la excepcion para coordinarlo.');
   }
 }
 
 function assertSlotAvailable_(startIso, currentAppointmentId) {
+  var start = tryParseLocalDateTime_(startIso);
+  if (!start) {
+    throw new Error('Horario invalido.');
+  }
+  var end = addMinutes_(start, getRuntimeConfig_().slotMinutes);
+  assertTimeRangeAvailable_(start, end, currentAppointmentId);
+}
+
+function assertTimeRangeAvailable_(startDate, endDate, currentAppointmentId) {
   var occupied = getSheetData_(APP_DEFAULTS.sheets.appointments).find(function(row) {
     if (currentAppointmentId && sameText_(row.appointmentId, currentAppointmentId)) {
       return false;
     }
-    if (row.effectiveStart !== startIso) {
+    if (!(row.appointmentStatus === APPOINTMENT_STATUS.PENDING || row.appointmentStatus === APPOINTMENT_STATUS.APPROVED)) {
       return false;
     }
-    return row.appointmentStatus === APPOINTMENT_STATUS.PENDING || row.appointmentStatus === APPOINTMENT_STATUS.APPROVED;
+    var occupiedStart = tryParseLocalDateTime_(row.effectiveStart);
+    var occupiedEnd = tryParseLocalDateTime_(row.effectiveEnd);
+    if (!occupiedStart || !occupiedEnd) {
+      return false;
+    }
+    return startDate < occupiedEnd && endDate > occupiedStart;
   });
   if (occupied) {
-    throw new Error('Ese horario ya no esta disponible.');
+    throw new Error('El rango seleccionado ya choca con otra cita definida.');
   }
 }
 
@@ -1723,7 +1736,8 @@ function isWithinSchedule_(date) {
   var schedule = getScheduleForDate_(date);
   var start = makeDateTime_(formatDate_(date), schedule.startHour, schedule.startMinute);
   var end = makeDateTime_(formatDate_(date), schedule.endHour, schedule.endMinute);
-  return date >= start && addMinutes_(date, getRuntimeConfig_().slotMinutes) <= end;
+  var durationMinutes = arguments.length > 1 ? Number(arguments[1] || 0) : getRuntimeConfig_().slotMinutes;
+  return date >= start && addMinutes_(date, durationMinutes) <= end;
 }
 
 function isBusinessDay_(date) {
@@ -2147,10 +2161,13 @@ function requestAppointment(payload) {
   }
 
   var slotStart = parseLocalDateTime_(clean.startIso);
-  validateSlotRequest_(slotStart);
-  assertSlotAvailable_(clean.startIso, '');
-
-  var slotEnd = addMinutes_(slotStart, getRuntimeConfig_().slotMinutes);
+  validateSlotRequest_(slotStart, durationMinutes);
+  var durationMinutes = normalizeDurationMinutes_(clean.durationMinutes || getRuntimeConfig_().slotMinutes);
+  if (!isWithinSchedule_(slotStart, durationMinutes)) {
+    throw new Error('El tiempo estimado supera el horario disponible para ese inicio.');
+  }
+  var slotEnd = addMinutes_(slotStart, durationMinutes);
+  assertTimeRangeAvailable_(slotStart, slotEnd, '');
   var appointment = {
     appointmentId: nextId_('CIT'),
     providerId: provider.providerId,
@@ -2169,6 +2186,7 @@ function requestAppointment(payload) {
     requestedEnd: formatDateTime_(slotEnd),
     effectiveStart: clean.startIso,
     effectiveEnd: formatDateTime_(slotEnd),
+    durationMinutes: String(durationMinutes),
     slotDate: formatDate_(slotStart),
     slotLabel: formatSlotLabel_(slotStart, slotEnd),
     appointmentStatus: APPOINTMENT_STATUS.PENDING,
@@ -2387,6 +2405,7 @@ function normalizeAppointmentRequest_(payload) {
   var ocNumber = digitsOnly_(payload.ocNumber || '');
   var startIso = String(payload.startIso || '').trim();
   var sessionToken = String(payload.sessionToken || '').trim();
+  var durationMinutes = normalizeDurationMinutes_(payload.durationMinutes || '');
 
   if (!sessionToken) {
     if (!vendorCode) {
@@ -2409,9 +2428,41 @@ function normalizeAppointmentRequest_(payload) {
     email: email,
     ocNumber: ocNumber,
     startIso: trimToMinute_(startIso),
+    durationMinutes: durationMinutes,
     notes: String(payload.notes || '').trim(),
     sessionToken: sessionToken
   };
+}
+
+function normalizeDurationMinutes_(value) {
+  var fallback = getRuntimeConfig_().slotMinutes;
+  var duration = Number(value || fallback);
+  if (isNaN(duration)) {
+    duration = fallback;
+  }
+  duration = Math.max(30, Math.min(duration, 180));
+  if (duration % 30 !== 0) {
+    throw new Error('El tiempo estimado debe ir de 30 en 30 minutos.');
+  }
+  return duration;
+}
+
+function getOverlappingAppointment_(appointments, slotStart, slotEnd) {
+  var selected = null;
+  (appointments || []).forEach(function(row) {
+    var start = tryParseLocalDateTime_(row.effectiveStart);
+    var end = tryParseLocalDateTime_(row.effectiveEnd);
+    if (!start || !end) {
+      return;
+    }
+    if (!(slotStart < end && slotEnd > start)) {
+      return;
+    }
+    if (!selected || row.appointmentStatus === APPOINTMENT_STATUS.APPROVED) {
+      selected = row;
+    }
+  });
+  return selected;
 }
 
 function validateVendorAgainstSap_(vendorCode, taxId) {

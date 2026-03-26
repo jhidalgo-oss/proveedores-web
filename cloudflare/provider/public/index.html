@@ -255,6 +255,17 @@
               <h3>Cita seleccionada</h3>
               <p id="selectedSlotLabel">Ninguna</p>
             </div>
+            <label>Tiempo de descarga estimado
+              <select id="appointmentDuration">
+                <option value="30">30 minutos</option>
+                <option value="60">1 hora</option>
+                <option value="90">1 hora 30 minutos</option>
+                <option value="120">2 horas</option>
+                <option value="150">2 horas 30 minutos</option>
+                <option value="180">3 horas</option>
+              </select>
+            </label>
+            <div id="appointmentDurationHint" class="helper-text">Selecciona la duraci&oacute;n estimada para recalcular los horarios disponibles.</div>
             <label>OC abierta
               <input id="appointmentOcSearch" type="text" placeholder="Busca por OC, &aacute;rea o material">
               <select id="appointmentOc">

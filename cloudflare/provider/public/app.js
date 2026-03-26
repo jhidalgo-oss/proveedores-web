@@ -45,6 +45,7 @@ function wireEvents() {
   document.getElementById("logoutButton").addEventListener("click", logout);
   document.getElementById("appointmentOc").addEventListener("change", renderSelectedPurchaseOrderSummary);
   document.getElementById("appointmentOcSearch").addEventListener("input", renderPendingPurchaseOrders);
+  document.getElementById("appointmentDuration").addEventListener("change", handleDurationChange);
   document.querySelector('#registerForm input[name="ocNumber"]').addEventListener("blur", lookupRegistrationVendor);
   document.querySelector('#registerForm input[name="ocNumber"]').addEventListener("input", resetRegistrationLookupState);
   document.getElementById("forgotPasswordToggle").addEventListener("click", function () {
@@ -58,6 +59,11 @@ function wireEvents() {
 async function loadBootstrap() {
   try {
     boot = await api("providerBootstrap", {});
+    const durationSelect = document.getElementById("appointmentDuration");
+    if (durationSelect && boot && boot.config && boot.config.slotMinutes) {
+      durationSelect.value = String(boot.config.slotMinutes);
+    }
+    renderDurationHint();
   } catch (error) {
     console.warn(error);
   }
@@ -270,6 +276,7 @@ function renderDashboard(data, options) {
   currentCalendarWeeks = [];
   currentWeekIndex = 0;
   document.getElementById("selectedSlotLabel").textContent = "Ninguna";
+  renderDurationHint();
   document.getElementById("guestAccessBlock").classList.add("hidden");
   document.getElementById("accountPanel").classList.remove("hidden");
 
@@ -418,6 +425,23 @@ function renderCalendar(calendar) {
   renderCurrentCalendarWeek();
 }
 
+function handleDurationChange() {
+  const durationMinutes = getSelectedDurationMinutes();
+  const hadSelection = Boolean(selectedSlot);
+  const selectedStillValid = selectedSlot && isSlotRangeSelectable(selectedSlot.startIso, durationMinutes);
+  if (!selectedStillValid) {
+    selectedSlot = null;
+    document.getElementById("selectedSlotLabel").textContent = "Ninguna";
+    if (hadSelection) {
+      showMessage("La nueva duración ya no cabe en el horario que habías elegido. Selecciona otro inicio.", "error");
+    }
+  } else {
+    updateSelectedSlotLabel();
+  }
+  renderDurationHint();
+  renderCurrentCalendarWeek();
+}
+
 function renderCurrentCalendarWeek() {
   const wrapper = document.getElementById("calendar");
   if (!wrapper) {
@@ -512,17 +536,24 @@ function renderCurrentCalendarWeek() {
 
       const button = document.createElement("button");
       button.type = "button";
-      button.className = "slot agenda-slot slot-" + String(slot.status || "available").toLowerCase();
-      button.disabled = !slot.isSelectable;
-      button.title = buildAgendaSlotTitle(day, slot);
-      button.setAttribute("aria-label", buildAgendaSlotTitle(day, slot));
-      button.innerHTML = '<span class="agenda-slot-indicator" aria-hidden="true"></span>';
+      const durationMinutes = getSelectedDurationMinutes();
+      const supportsDuration = slot.status === "AVAILABLE" && canSlotSupportDuration(day, slot, durationMinutes);
+      const visualStatus = slot.status === "AVAILABLE" && !supportsDuration ? "range" : String(slot.status || "available").toLowerCase();
+      button.className = "slot agenda-slot slot-" + visualStatus;
+      button.disabled = !supportsDuration;
+      button.title = buildAgendaSlotTitle(day, slot, supportsDuration, durationMinutes);
+      button.setAttribute("aria-label", buildAgendaSlotTitle(day, slot, supportsDuration, durationMinutes));
+      button.innerHTML = '<span class="agenda-slot-indicator" aria-hidden="true"></span><span class="agenda-slot-text">' + escapeHtml(getAgendaSlotCellText(slot, supportsDuration, durationMinutes)) + "</span>";
       if (selectedSlot && selectedSlot.startIso === slot.startIso) {
         button.classList.add("selected");
       }
       button.addEventListener("click", function () {
+        if (!supportsDuration) {
+          showMessage("Ese inicio no tiene tiempo continuo suficiente para la descarga estimada.", "error");
+          return;
+        }
         selectedSlot = slot;
-        document.getElementById("selectedSlotLabel").textContent = day.weekday + " " + day.date + " · " + slot.label;
+        document.getElementById("selectedSlotLabel").textContent = buildSelectedSlotText(day, slot, durationMinutes);
         document.querySelectorAll(".agenda-slot.selected").forEach(function (node) {
           node.classList.remove("selected");
         });
@@ -594,7 +625,23 @@ function getAgendaSlotLabel(slot) {
   return slot.label || "";
 }
 
-function buildAgendaSlotTitle(day, slot) {
+function getAgendaSlotCellText(slot, supportsDuration, durationMinutes) {
+  if (slot.status === "AVAILABLE") {
+    return supportsDuration ? durationMinutes + " min" : "";
+  }
+  if (slot.status === "PENDING") {
+    return "Pend.";
+  }
+  if (slot.status === "APPROVED") {
+    return "Ocup.";
+  }
+  return "";
+}
+
+function buildAgendaSlotTitle(day, slot, supportsDuration, durationMinutes) {
+  if (slot.status === "AVAILABLE" && !supportsDuration) {
+    return day.weekday + " " + day.date + " · " + slot.label + " · No hay " + durationMinutes + " minutos continuos desde este inicio.";
+  }
   return day.weekday + " " + day.date + " · " + slot.label + " · " + getAgendaSlotLabel(slot);
 }
 
@@ -615,6 +662,89 @@ function getIsoWeekNumber(dateString) {
   utcDate.setUTCDate(utcDate.getUTCDate() + 4 - dayNum);
   const yearStart = new Date(Date.UTC(utcDate.getUTCFullYear(), 0, 1));
   return Math.ceil((((utcDate - yearStart) / 86400000) + 1) / 7);
+}
+
+function getSelectedDurationMinutes() {
+  const select = document.getElementById("appointmentDuration");
+  const value = Number(select ? select.value : 30);
+  return Number.isFinite(value) ? value : 30;
+}
+
+function canSlotSupportDuration(day, slot, durationMinutes) {
+  const slotMinutes = Number(boot && boot.config && boot.config.slotMinutes ? boot.config.slotMinutes : 30);
+  const requiredSlots = Math.max(1, Math.ceil(durationMinutes / slotMinutes));
+  const daySlots = Array.isArray(day && day.slots) ? day.slots : [];
+  const startIndex = daySlots.findIndex(function (item) {
+    return item.startIso === slot.startIso;
+  });
+
+  if (startIndex < 0) {
+    return false;
+  }
+
+  for (let index = 0; index < requiredSlots; index += 1) {
+    const current = daySlots[startIndex + index];
+    if (!current || current.status !== "AVAILABLE") {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function isSlotRangeSelectable(startIso, durationMinutes) {
+  for (const week of currentCalendarWeeks) {
+    for (const day of week.days || []) {
+      const slot = (day.slots || []).find(function (item) {
+        return item.startIso === startIso;
+      });
+      if (slot) {
+        return canSlotSupportDuration(day, slot, durationMinutes);
+      }
+    }
+  }
+  return false;
+}
+
+function buildSelectedSlotText(day, slot, durationMinutes) {
+  const startTime = String(slot.startIso || "").slice(11, 16);
+  const endDate = new Date(slot.startIso);
+  endDate.setMinutes(endDate.getMinutes() + durationMinutes);
+  const endTime = String(endDate.getHours()).padStart(2, "0") + ":" + String(endDate.getMinutes()).padStart(2, "0");
+  return day.weekday + " " + day.date + " · " + startTime + " - " + endTime + " · " + durationMinutes + " min";
+}
+
+function updateSelectedSlotLabel() {
+  if (!selectedSlot) {
+    document.getElementById("selectedSlotLabel").textContent = "Ninguna";
+    return;
+  }
+  const match = findDayBySlotStart(selectedSlot.startIso);
+  if (!match) {
+    document.getElementById("selectedSlotLabel").textContent = selectedSlot.label || "Ninguna";
+    return;
+  }
+  document.getElementById("selectedSlotLabel").textContent = buildSelectedSlotText(match.day, selectedSlot, getSelectedDurationMinutes());
+}
+
+function findDayBySlotStart(startIso) {
+  for (const week of currentCalendarWeeks) {
+    for (const day of week.days || []) {
+      if ((day.slots || []).some(function (item) { return item.startIso === startIso; })) {
+        return { week, day };
+      }
+    }
+  }
+  return null;
+}
+
+function renderDurationHint() {
+  const hint = document.getElementById("appointmentDurationHint");
+  if (!hint) {
+    return;
+  }
+  const durationMinutes = getSelectedDurationMinutes();
+  hint.textContent = "Se bloquearán " + durationMinutes + " minutos continuos desde la hora elegida. Si el rango choca o se pasa del horario, ese inicio no podrá seleccionarse.";
 }
 
 function renderAppointments(appointments) {
@@ -669,6 +799,7 @@ async function requestAppointment() {
       sessionToken: sessionToken,
       providerId: providerState.providerId,
       startIso: selectedSlot.startIso,
+      durationMinutes: getSelectedDurationMinutes(),
       ocNumber: document.getElementById("appointmentOc").value,
       notes: document.getElementById("appointmentNotes").value
     });

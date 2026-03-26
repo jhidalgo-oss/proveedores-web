@@ -1108,9 +1108,11 @@ textarea:disabled,
 
 .agenda-slot {
   justify-content: center;
+  align-items: center;
+  gap: 6px;
   width: 100%;
   min-height: 28px;
-  padding: 0;
+  padding: 0 6px;
   border-radius: 10px;
   border: 1px solid rgba(120, 156, 182, 0.16);
   box-shadow: none;
@@ -1122,6 +1124,13 @@ textarea:disabled,
   border-radius: 999px;
   background: currentColor;
   opacity: 0.9;
+}
+
+.agenda-slot-text {
+  font-size: 10px;
+  line-height: 1;
+  font-weight: 800;
+  letter-spacing: 0.01em;
 }
 
 .agenda-slot:hover:not(:disabled) {
@@ -1145,6 +1154,12 @@ textarea:disabled,
   background: linear-gradient(180deg, #dbeaf8, #cddff0);
   color: #4f88b8;
   border-color: rgba(79, 136, 184, 0.28);
+}
+
+.agenda-slot.slot-range {
+  background: linear-gradient(180deg, #f5f7f9, #edf2f5);
+  color: #b2bcc6;
+  border-color: rgba(154, 168, 180, 0.22);
 }
 
 .agenda-slot:disabled {
@@ -1287,6 +1302,10 @@ textarea:disabled,
 .request-box label {
   gap: 6px;
   font-size: 13px;
+}
+
+#appointmentDurationHint {
+  margin-bottom: 12px;
 }
 
 .request-box input,
