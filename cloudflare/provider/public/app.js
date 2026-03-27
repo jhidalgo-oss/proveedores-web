@@ -304,6 +304,7 @@ function renderDashboard(data, options) {
   renderDurationHint();
   document.getElementById("guestAccessBlock").classList.add("hidden");
   document.getElementById("accountPanel").classList.remove("hidden");
+  syncAccountIdentity(data.provider);
 
   const summary = document.getElementById("providerSummary");
   summary.classList.remove("hidden");
@@ -343,6 +344,7 @@ function renderAuthenticatedShell(provider) {
   providerState = provider;
   document.getElementById("guestAccessBlock").classList.add("hidden");
   document.getElementById("accountPanel").classList.remove("hidden");
+  syncAccountIdentity(provider);
   const summary = document.getElementById("providerSummary");
   summary.classList.remove("hidden");
   summary.innerHTML = [
@@ -915,7 +917,9 @@ function renderAppointments(appointments) {
 
 async function requestAppointment() {
   const activeToken = getActiveSessionToken();
-  if (!providerState) {
+  const accountIdentity = getAccountIdentity();
+  const identity = providerState || accountIdentity;
+  if (!identity) {
     renderRequestFeedback("Primero inicia sesión con una cuenta válida.", "error");
     showMessage("Primero inicia sesi\u00f3n con una cuenta v\u00e1lida.", "error");
     return;
@@ -942,9 +946,9 @@ async function requestAppointment() {
     }
     const response = await api("requestAppointment", {
       sessionToken: activeToken || "",
-      providerId: providerState.providerId,
-      vendorCode: providerState.vendorCode,
-      email: providerState.email,
+      providerId: identity.providerId || "",
+      vendorCode: identity.vendorCode || "",
+      email: identity.email || "",
       startIso: selectedSlot.startIso,
       durationMinutes: getSelectedDurationMinutes(),
       ocNumber: document.getElementById("appointmentOc").value,
@@ -976,10 +980,45 @@ function logout() {
 function clearSession() {
   sessionToken = "";
   localStorage.removeItem(SESSION_STORAGE_KEY);
+  syncAccountIdentity(null);
 }
 
 function getActiveSessionToken() {
   return String(sessionToken || localStorage.getItem(SESSION_STORAGE_KEY) || "").trim();
+}
+
+function syncAccountIdentity(provider) {
+  const panel = document.getElementById("accountPanel");
+  if (!panel) {
+    return;
+  }
+  if (!provider) {
+    delete panel.dataset.providerId;
+    delete panel.dataset.vendorCode;
+    delete panel.dataset.email;
+    return;
+  }
+  panel.dataset.providerId = provider.providerId || "";
+  panel.dataset.vendorCode = provider.vendorCode || "";
+  panel.dataset.email = provider.email || "";
+}
+
+function getAccountIdentity() {
+  const panel = document.getElementById("accountPanel");
+  if (!panel) {
+    return null;
+  }
+  const providerId = String(panel.dataset.providerId || "").trim();
+  const vendorCode = String(panel.dataset.vendorCode || "").trim();
+  const email = String(panel.dataset.email || "").trim();
+  if (!providerId && !vendorCode && !email) {
+    return null;
+  }
+  return {
+    providerId: providerId,
+    vendorCode: vendorCode,
+    email: email
+  };
 }
 
 function togglePanel(panelId) {
