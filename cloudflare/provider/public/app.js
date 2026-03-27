@@ -936,24 +936,24 @@ async function requestAppointment() {
   const identity = providerState || accountIdentity;
   if (!identity) {
     renderRequestFeedback("Primero inicia sesión con una cuenta válida.", "error");
-    showMessage("Primero inicia sesi\u00f3n con una cuenta v\u00e1lida.", "error");
+    hideGlobalMessage();
     return;
   }
   if (!selectedSlot) {
     renderRequestFeedback("Selecciona una hora de inicio disponible.", "error");
-    showMessage("Selecciona un horario disponible.", "error");
+    hideGlobalMessage();
     return;
   }
   if (!document.getElementById("appointmentOc").value) {
     renderRequestFeedback("Selecciona una OC abierta para continuar.", "error");
-    showMessage("Selecciona una OC abierta para continuar.", "error");
+    hideGlobalMessage();
     document.getElementById("appointmentOc").focus();
     return;
   }
 
   const releaseBusy = setBusyState(document.getElementById("requestAppointmentButton"), true);
+  hideGlobalMessage();
   renderRequestFeedback("Registrando tu solicitud de cita...", "loading");
-  showMessage("Registrando tu solicitud de cita...", "loading");
 
   try {
     if (activeToken) {
@@ -970,17 +970,17 @@ async function requestAppointment() {
       notes: document.getElementById("appointmentNotes").value
     });
     renderRequestFeedback(response.message, "success");
-    showMessage(response.message, "success");
     try {
       await refreshDashboard({ preserveShell: true });
+      hideGlobalMessage();
       renderRequestFeedback("", "");
     } catch (error) {
       renderRequestFeedback(response.message + " Si no ves el cambio de inmediato, actualiza el panel nuevamente.", "success");
-      showMessage(response.message + " Si no ves el cambio de inmediato, actualiza el panel nuevamente.", "success");
+      hideGlobalMessage();
     }
   } catch (error) {
     renderRequestFeedback(error.message || "No pudimos registrar tu solicitud en este momento. Intenta nuevamente en unos minutos.", "error");
-    showMessage(error.message || "No pudimos registrar tu solicitud en este momento. Intenta nuevamente en unos minutos.", "error");
+    hideGlobalMessage();
   } finally {
     releaseBusy();
   }
