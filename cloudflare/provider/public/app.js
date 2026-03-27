@@ -362,6 +362,8 @@ function renderPendingPurchaseOrders() {
 
   if (filteredOrders.some(function (order) { return order.poNumber === currentValue; })) {
     select.value = currentValue;
+  } else if (!currentValue && filteredOrders.length) {
+    select.value = filteredOrders[0].poNumber;
   }
 
   if (!openOrders.length) {
@@ -391,6 +393,7 @@ function renderSelectedPurchaseOrderSummary() {
       summary.classList.add("hidden");
       summary.innerHTML = "";
     }
+    renderRequestFeedback("", "");
     return;
   }
 
@@ -404,6 +407,7 @@ function renderSelectedPurchaseOrderSummary() {
     "<p><strong>Lineas:</strong> " + escapeHtml(String(selected.lineCount || 0)) + "</p>",
     "<p><strong>Resumen:</strong> " + escapeHtml(selected.itemsSummary || "Sin detalle de materiales") + "</p>"
   ].join("");
+  renderRequestFeedback("", "");
 }
 
 function formatQuantity(value, uom) {
@@ -887,15 +891,24 @@ function renderAppointments(appointments) {
 
 async function requestAppointment() {
   if (!providerState || !sessionToken) {
+    renderRequestFeedback("Primero inicia sesión con una cuenta válida.", "error");
     showMessage("Primero inicia sesi\u00f3n con una cuenta v\u00e1lida.", "error");
     return;
   }
   if (!selectedSlot) {
+    renderRequestFeedback("Selecciona una hora de inicio disponible.", "error");
     showMessage("Selecciona un horario disponible.", "error");
+    return;
+  }
+  if (!document.getElementById("appointmentOc").value) {
+    renderRequestFeedback("Selecciona una OC abierta para continuar.", "error");
+    showMessage("Selecciona una OC abierta para continuar.", "error");
+    document.getElementById("appointmentOc").focus();
     return;
   }
 
   const releaseBusy = setBusyState(document.getElementById("requestAppointmentButton"), true);
+  renderRequestFeedback("Registrando tu solicitud de cita...", "loading");
   showMessage("Registrando tu solicitud de cita...", "loading");
 
   try {
@@ -907,13 +920,16 @@ async function requestAppointment() {
       ocNumber: document.getElementById("appointmentOc").value,
       notes: document.getElementById("appointmentNotes").value
     });
+    renderRequestFeedback(response.message, "success");
     showMessage(response.message, "success");
     try {
       await refreshDashboard({ preserveShell: true });
     } catch (error) {
+      renderRequestFeedback(response.message + " Si no ves el cambio de inmediato, actualiza el panel nuevamente.", "success");
       showMessage(response.message + " Si no ves el cambio de inmediato, actualiza el panel nuevamente.", "success");
     }
   } catch (error) {
+    renderRequestFeedback(error.message || "No pudimos registrar tu solicitud en este momento. Intenta nuevamente en unos minutos.", "error");
     showMessage(error.message || "No pudimos registrar tu solicitud en este momento. Intenta nuevamente en unos minutos.", "error");
   } finally {
     releaseBusy();
@@ -1134,6 +1150,23 @@ function hideAccessMessage() {
   }
   box.textContent = "";
   box.className = "message hidden";
+}
+
+function renderRequestFeedback(text, type) {
+  const box = document.getElementById("requestFeedback");
+  if (!box) {
+    return;
+  }
+  if (!text) {
+    box.textContent = "";
+    box.className = "note hidden";
+    return;
+  }
+  box.textContent = text;
+  box.className = "note";
+  if (type) {
+    box.classList.add("note-" + type);
+  }
 }
 
 function showAccessValidationMessage(text) {

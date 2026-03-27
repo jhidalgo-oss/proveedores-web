@@ -1502,6 +1502,31 @@ textarea:disabled,
   margin-bottom: 0;
 }
 
+#requestFeedback {
+  margin-top: 6px;
+  margin-bottom: 6px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+#requestFeedback.note-loading {
+  border-color: rgba(111, 167, 214, 0.28);
+  background: rgba(237, 246, 255, 0.9);
+  color: #4f88b8;
+}
+
+#requestFeedback.note-success {
+  border-color: rgba(46, 125, 82, 0.2);
+  background: rgba(226, 241, 230, 0.92);
+  color: #1f5b39;
+}
+
+#requestFeedback.note-error {
+  border-color: rgba(181, 85, 48, 0.18);
+  background: rgba(252, 239, 231, 0.92);
+  color: #9c4a27;
+}
+
 table {
   width: 100%;
   border-collapse: collapse;
