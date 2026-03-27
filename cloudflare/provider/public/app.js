@@ -505,7 +505,7 @@ function renderCurrentCalendarWeek() {
 
   const corner = document.createElement("div");
   corner.className = "agenda-corner";
-  corner.textContent = "Hora";
+  corner.textContent = "Hora Inicio";
   grid.appendChild(corner);
 
   week.days.forEach(function (day) {
