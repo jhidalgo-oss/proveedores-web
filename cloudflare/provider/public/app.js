@@ -14,8 +14,8 @@ let messageHideTimer = null;
 document.addEventListener("DOMContentLoaded", async function () {
   wireEvents();
   await loadBootstrap();
-  clearSession();
   resetProviderView();
+  await restorePersistedSession();
 });
 
 function wireEvents() {
@@ -67,6 +67,28 @@ async function loadBootstrap() {
   } catch (error) {
     console.warn(error);
   }
+}
+
+async function restorePersistedSession() {
+  const persistedToken = getActiveSessionToken();
+  if (!persistedToken) {
+    return;
+  }
+
+  sessionToken = persistedToken;
+  try {
+    const dashboard = await refreshDashboard();
+    if (dashboard && dashboard.found) {
+      hideGlobalMessage();
+      hideAccessMessage();
+      return;
+    }
+  } catch (error) {
+    console.warn("No pudimos restaurar la sesion persistida.", error);
+  }
+
+  clearSession();
+  resetProviderView();
 }
 
 async function submitRegistration(event) {
@@ -240,12 +262,14 @@ function handleAuthenticatedResponse(response) {
 
 async function refreshDashboard(options) {
   options = options || {};
-  if (!sessionToken) {
+  const activeToken = getActiveSessionToken();
+  if (!activeToken) {
     return null;
   }
+  sessionToken = activeToken;
 
   const data = await api("providerDashboard", {
-    sessionToken: sessionToken,
+    sessionToken: activeToken,
     startDate: boot && boot.today ? boot.today : null
   });
   renderDashboard(data, options);
@@ -890,7 +914,8 @@ function renderAppointments(appointments) {
 }
 
 async function requestAppointment() {
-  if (!providerState || !sessionToken) {
+  const activeToken = getActiveSessionToken();
+  if (!providerState || !activeToken) {
     renderRequestFeedback("Primero inicia sesión con una cuenta válida.", "error");
     showMessage("Primero inicia sesi\u00f3n con una cuenta v\u00e1lida.", "error");
     return;
@@ -912,8 +937,9 @@ async function requestAppointment() {
   showMessage("Registrando tu solicitud de cita...", "loading");
 
   try {
+    sessionToken = activeToken;
     const response = await api("requestAppointment", {
-      sessionToken: sessionToken,
+      sessionToken: activeToken,
       providerId: providerState.providerId,
       startIso: selectedSlot.startIso,
       durationMinutes: getSelectedDurationMinutes(),
@@ -946,6 +972,10 @@ function logout() {
 function clearSession() {
   sessionToken = "";
   localStorage.removeItem(SESSION_STORAGE_KEY);
+}
+
+function getActiveSessionToken() {
+  return String(sessionToken || localStorage.getItem(SESSION_STORAGE_KEY) || "").trim();
 }
 
 function togglePanel(panelId) {
