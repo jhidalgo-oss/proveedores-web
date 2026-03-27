@@ -365,6 +365,36 @@ h3 {
   margin-bottom: var(--space-3);
 }
 
+.access-intro h2,
+.card-head h3,
+.request-head h3,
+.section-head h2,
+.section-head h3,
+.account-panel h3,
+.recovery-panel h4 {
+  font-family: "Manrope", sans-serif;
+  letter-spacing: -0.02em;
+  line-height: 1.08;
+  font-weight: 800;
+}
+
+.access-intro h2 {
+  font-size: 32px;
+}
+
+.card-head h3,
+.request-head h3,
+.section-head h2,
+.section-head h3,
+.account-panel h3 {
+  font-size: 18px;
+}
+
+.recovery-panel h4 {
+  font-size: 17px;
+  margin: 0 0 8px;
+}
+
 .section-copy,
 .muted {
   color: var(--muted);
@@ -1411,8 +1441,8 @@ textarea:disabled,
 
 .request-head h3 {
   margin: 6px 0;
-  font-size: 24px;
-  line-height: 0.98;
+  font-size: 18px;
+  line-height: 1.1;
 }
 
 .request-head p {
