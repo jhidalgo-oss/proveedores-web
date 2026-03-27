@@ -640,21 +640,17 @@ function getAgendaSlotLabel(slot) {
 function buildAgendaSlotInnerHtml(day, slot, supportsDuration, durationMinutes, rangeSelection) {
   const startTime = escapeHtml(String(slot.startIso || "").slice(11, 16));
   const endTime = escapeHtml(computeSlotRangeEnd(selectedSlot ? selectedSlot.startIso : slot.startIso, durationMinutes));
-  const durationLabel = escapeHtml(formatDurationLabel(durationMinutes));
 
   if (rangeSelection.isSingle) {
     return [
       '<span class="agenda-range-time agenda-range-time-start">', startTime, "</span>",
-      '<span class="agenda-range-duration">', durationLabel, "</span>",
+      '<span class="agenda-range-connector">a</span>',
       '<span class="agenda-range-time agenda-range-time-end">', escapeHtml(computeSlotRangeEnd(slot.startIso, durationMinutes)), "</span>"
     ].join("");
   }
 
   if (rangeSelection.isStart) {
-    return [
-      '<span class="agenda-range-time agenda-range-time-start">', startTime, "</span>",
-      '<span class="agenda-range-duration">', durationLabel, "</span>"
-    ].join("");
+    return '<span class="agenda-range-time agenda-range-time-start">' + startTime + "</span>";
   }
 
   if (rangeSelection.isEnd) {
@@ -662,7 +658,7 @@ function buildAgendaSlotInnerHtml(day, slot, supportsDuration, durationMinutes, 
   }
 
   if (rangeSelection.isMiddle) {
-    return '<span class="agenda-range-fill" aria-hidden="true"></span>';
+    return '<span class="agenda-range-connector" aria-hidden="true">a</span>';
   }
 
   if (slot.status === "PENDING" || slot.status === "APPROVED") {
