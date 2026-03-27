@@ -294,6 +294,7 @@ function renderDashboard(data, options) {
 
   activateTab("loginPanel");
   setAccessAuthenticatedMode(true);
+  renderRequestFeedback("", "");
   providerState = data.provider;
   appointmentsState = data.appointments || [];
   pendingPurchaseOrdersState = data.pendingPurchaseOrders || [];
@@ -341,6 +342,7 @@ function renderAuthenticatedShell(provider) {
   }
   activateTab("loginPanel");
   setAccessAuthenticatedMode(true);
+  renderRequestFeedback("", "");
   providerState = provider;
   document.getElementById("guestAccessBlock").classList.add("hidden");
   document.getElementById("accountPanel").classList.remove("hidden");
@@ -597,6 +599,7 @@ function renderCurrentCalendarWeek() {
           showMessage("Ese inicio no tiene tiempo continuo suficiente para la descarga estimada.", "error");
           return;
       }
+      renderRequestFeedback("", "");
       selectedSlot = slot;
       updateSelectedSlotLabel();
       renderCurrentCalendarWeek();
@@ -970,6 +973,7 @@ async function requestAppointment() {
     showMessage(response.message, "success");
     try {
       await refreshDashboard({ preserveShell: true });
+      renderRequestFeedback("", "");
     } catch (error) {
       renderRequestFeedback(response.message + " Si no ves el cambio de inmediato, actualiza el panel nuevamente.", "success");
       showMessage(response.message + " Si no ves el cambio de inmediato, actualiza el panel nuevamente.", "success");
