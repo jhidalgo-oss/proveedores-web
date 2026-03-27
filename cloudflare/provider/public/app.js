@@ -898,7 +898,7 @@ function renderAppointments(appointments) {
 
     return [
       "<tr>",
-      "<td>" + escapeHtml(item.slotDate) + "</td>",
+      "<td>" + escapeHtml(formatDisplayDate(item.slotDate)) + "</td>",
       "<td>" + escapeHtml(item.slotLabel) + "</td>",
       "<td>" + escapeHtml(item.appointmentStatus) + "</td>",
       "<td>" + escapeHtml(item.ocNumber || "") + "</td>",
@@ -913,6 +913,18 @@ function renderAppointments(appointments) {
     "<tbody>" + rows + "</tbody>",
     "</table>"
   ].join("");
+}
+
+function formatDisplayDate(value) {
+  const text = String(value || "").trim();
+  if (!text) {
+    return "";
+  }
+  const isoMatch = text.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (isoMatch) {
+    return isoMatch[1];
+  }
+  return text;
 }
 
 async function requestAppointment() {
