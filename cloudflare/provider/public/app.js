@@ -279,10 +279,10 @@ async function refreshDashboard(options) {
 function renderDashboard(data, options) {
   options = options || {};
   if (!data.found) {
-    if (options.preserveShell && providerState && sessionToken) {
+    if (providerState) {
       collapseDashboardPanels();
       renderPersistentWarning(data.message || "No pudimos terminar de cargar tu panel en este momento. Intenta actualizar nuevamente.");
-      showMessage("Tu sesi\u00f3n sigue activa, pero no pudimos cargar todo el panel en este momento. Intenta actualizar nuevamente.", "error");
+      showMessage("Tu sesi\u00f3n sigue activa, pero no pudimos actualizar el panel en este momento. Intenta nuevamente.", "error");
       return;
     }
 
