@@ -544,8 +544,11 @@ function renderCurrentCalendarWeek() {
       button.title = buildAgendaSlotTitle(day, slot, supportsDuration, durationMinutes);
       button.setAttribute("aria-label", buildAgendaSlotTitle(day, slot, supportsDuration, durationMinutes));
       button.innerHTML = '<span class="agenda-slot-indicator" aria-hidden="true"></span><span class="agenda-slot-text">' + escapeHtml(getAgendaSlotCellText(slot, supportsDuration, durationMinutes)) + "</span>";
+      if (isSlotInsideSelectedRange(slot.startIso)) {
+        button.classList.add("selected-range");
+      }
       if (selectedSlot && selectedSlot.startIso === slot.startIso) {
-        button.classList.add("selected");
+        button.classList.add("selected", "selected-start");
       }
       button.addEventListener("click", function () {
         if (!supportsDuration) {
@@ -736,6 +739,23 @@ function findDayBySlotStart(startIso) {
     }
   }
   return null;
+}
+
+function isSlotInsideSelectedRange(slotStartIso) {
+  if (!selectedSlot) {
+    return false;
+  }
+  const durationMinutes = getSelectedDurationMinutes();
+  const selectedStart = new Date(selectedSlot.startIso);
+  const selectedEnd = new Date(selectedSlot.startIso);
+  const slotStart = new Date(slotStartIso);
+
+  if (Number.isNaN(selectedStart.getTime()) || Number.isNaN(selectedEnd.getTime()) || Number.isNaN(slotStart.getTime())) {
+    return false;
+  }
+
+  selectedEnd.setMinutes(selectedEnd.getMinutes() + durationMinutes);
+  return slotStart >= selectedStart && slotStart < selectedEnd;
 }
 
 function renderDurationHint() {

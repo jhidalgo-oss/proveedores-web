@@ -1272,6 +1272,18 @@ textarea:disabled,
   box-shadow: 0 0 0 4px rgba(127, 172, 213, 0.18);
 }
 
+.agenda-slot.selected-range {
+  background: linear-gradient(180deg, #cfe3f7, #c2daf2);
+  color: #356f9b;
+  border-color: rgba(53, 111, 155, 0.32);
+}
+
+.agenda-slot.selected-start {
+  background: linear-gradient(180deg, #b7d5f2, #a8cbef);
+  color: #245d88;
+  border-color: rgba(36, 93, 136, 0.38);
+}
+
 .request-box {
   position: sticky;
   top: 20px;
