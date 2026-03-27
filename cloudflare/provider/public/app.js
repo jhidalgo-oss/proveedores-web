@@ -538,16 +538,18 @@ function renderCurrentCalendarWeek() {
       button.type = "button";
       const durationMinutes = getSelectedDurationMinutes();
       const supportsDuration = slot.status === "AVAILABLE" && canSlotSupportDuration(day, slot, durationMinutes);
+      const inSelectedRange = isSlotInsideSelectedRange(slot.startIso);
+      const isSelectedStart = Boolean(selectedSlot && selectedSlot.startIso === slot.startIso);
       const visualStatus = slot.status === "AVAILABLE" && !supportsDuration ? "range" : String(slot.status || "available").toLowerCase();
       button.className = "slot agenda-slot slot-" + visualStatus;
       button.disabled = !supportsDuration;
       button.title = buildAgendaSlotTitle(day, slot, supportsDuration, durationMinutes);
       button.setAttribute("aria-label", buildAgendaSlotTitle(day, slot, supportsDuration, durationMinutes));
-      button.innerHTML = '<span class="agenda-slot-indicator" aria-hidden="true"></span><span class="agenda-slot-text">' + escapeHtml(getAgendaSlotCellText(slot, supportsDuration, durationMinutes)) + "</span>";
-      if (isSlotInsideSelectedRange(slot.startIso)) {
+      button.innerHTML = buildAgendaSlotInnerHtml(slot, supportsDuration, durationMinutes, inSelectedRange, isSelectedStart);
+      if (inSelectedRange) {
         button.classList.add("selected-range");
       }
-      if (selectedSlot && selectedSlot.startIso === slot.startIso) {
+      if (isSelectedStart) {
         button.classList.add("selected", "selected-start");
       }
       button.addEventListener("click", function () {
@@ -628,17 +630,25 @@ function getAgendaSlotLabel(slot) {
   return slot.label || "";
 }
 
-function getAgendaSlotCellText(slot, supportsDuration, durationMinutes) {
+function getAgendaSlotCellText(slot, supportsDuration, durationMinutes, inSelectedRange, isSelectedStart) {
+  if (inSelectedRange) {
+    return isSelectedStart ? formatDurationLabel(durationMinutes) : "";
+  }
   if (slot.status === "AVAILABLE") {
-    return supportsDuration ? durationMinutes + " min" : "";
+    return "";
   }
   if (slot.status === "PENDING") {
-    return "Pend.";
+    return "";
   }
   if (slot.status === "APPROVED") {
-    return "Ocup.";
+    return "";
   }
   return "";
+}
+
+function buildAgendaSlotInnerHtml(slot, supportsDuration, durationMinutes, inSelectedRange, isSelectedStart) {
+  const text = getAgendaSlotCellText(slot, supportsDuration, durationMinutes, inSelectedRange, isSelectedStart);
+  return '<span class="agenda-slot-indicator" aria-hidden="true"></span><span class="agenda-slot-text">' + escapeHtml(text) + "</span>";
 }
 
 function buildAgendaSlotTitle(day, slot, supportsDuration, durationMinutes) {
@@ -715,6 +725,13 @@ function buildSelectedSlotText(day, slot, durationMinutes) {
   endDate.setMinutes(endDate.getMinutes() + durationMinutes);
   const endTime = String(endDate.getHours()).padStart(2, "0") + ":" + String(endDate.getMinutes()).padStart(2, "0");
   return day.weekday + " " + day.date + " · " + startTime + " - " + endTime + " · " + durationMinutes + " min";
+}
+
+function formatDurationLabel(durationMinutes) {
+  if (durationMinutes % 60 === 0) {
+    return String(durationMinutes / 60) + " h";
+  }
+  return String(durationMinutes) + " min";
 }
 
 function updateSelectedSlotLabel() {

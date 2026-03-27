@@ -1131,6 +1131,7 @@ textarea:disabled,
   line-height: 1;
   font-weight: 800;
   letter-spacing: 0.01em;
+  min-width: 0;
 }
 
 .agenda-slot:hover:not(:disabled) {
@@ -1282,6 +1283,14 @@ textarea:disabled,
   background: linear-gradient(180deg, #b7d5f2, #a8cbef);
   color: #245d88;
   border-color: rgba(36, 93, 136, 0.38);
+}
+
+.agenda-slot.selected-range .agenda-slot-indicator {
+  opacity: 0;
+}
+
+.agenda-slot.selected-start .agenda-slot-indicator {
+  opacity: 1;
 }
 
 .request-box {
