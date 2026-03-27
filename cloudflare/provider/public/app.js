@@ -154,7 +154,8 @@ async function submitLogin(event) {
     const response = await api("providerLogin", payload);
     handleAuthenticatedResponse(response);
     if (hasRenderableDashboard(response.dashboard)) {
-      showMessage("Ingreso correcto.", "success");
+      hideGlobalMessage();
+      hideAccessMessage();
     } else {
       clearSession();
       resetProviderView();
@@ -538,35 +539,41 @@ function renderCurrentCalendarWeek() {
       button.type = "button";
       const durationMinutes = getSelectedDurationMinutes();
       const supportsDuration = slot.status === "AVAILABLE" && canSlotSupportDuration(day, slot, durationMinutes);
-      const inSelectedRange = isSlotInsideSelectedRange(slot.startIso);
-      const isSelectedStart = Boolean(selectedSlot && selectedSlot.startIso === slot.startIso);
+      const rangeSelection = getRangeSelectionState(day, slot, durationMinutes);
       const visualStatus = slot.status === "AVAILABLE" && !supportsDuration ? "range" : String(slot.status || "available").toLowerCase();
       button.className = "slot agenda-slot slot-" + visualStatus;
       button.disabled = !supportsDuration;
       button.title = buildAgendaSlotTitle(day, slot, supportsDuration, durationMinutes);
       button.setAttribute("aria-label", buildAgendaSlotTitle(day, slot, supportsDuration, durationMinutes));
-      button.innerHTML = buildAgendaSlotInnerHtml(slot, supportsDuration, durationMinutes, inSelectedRange, isSelectedStart);
-      if (inSelectedRange) {
+      button.innerHTML = buildAgendaSlotInnerHtml(day, slot, supportsDuration, durationMinutes, rangeSelection);
+      if (rangeSelection.inRange) {
         button.classList.add("selected-range");
       }
-      if (isSelectedStart) {
-        button.classList.add("selected", "selected-start");
+      if (rangeSelection.isSingle) {
+        button.classList.add("selected", "selected-single");
+      } else {
+        if (rangeSelection.isStart) {
+          button.classList.add("selected", "selected-start");
+        }
+        if (rangeSelection.isMiddle) {
+          button.classList.add("selected-middle");
+        }
+      if (rangeSelection.isEnd) {
+        button.classList.add("selected-end");
       }
-      button.addEventListener("click", function () {
+    }
+    button.addEventListener("click", function () {
         if (!supportsDuration) {
           showMessage("Ese inicio no tiene tiempo continuo suficiente para la descarga estimada.", "error");
           return;
-        }
-        selectedSlot = slot;
-        document.getElementById("selectedSlotLabel").textContent = buildSelectedSlotText(day, slot, durationMinutes);
-        document.querySelectorAll(".agenda-slot.selected").forEach(function (node) {
-          node.classList.remove("selected");
-        });
-        button.classList.add("selected");
-      });
-      cell.appendChild(button);
-      grid.appendChild(cell);
+      }
+      selectedSlot = slot;
+      updateSelectedSlotLabel();
+      renderCurrentCalendarWeek();
     });
+    cell.appendChild(button);
+    grid.appendChild(cell);
+  });
   });
 
   weekNode.appendChild(grid);
@@ -630,25 +637,39 @@ function getAgendaSlotLabel(slot) {
   return slot.label || "";
 }
 
-function getAgendaSlotCellText(slot, supportsDuration, durationMinutes, inSelectedRange, isSelectedStart) {
-  if (inSelectedRange) {
-    return isSelectedStart ? formatDurationLabel(durationMinutes) : "";
-  }
-  if (slot.status === "AVAILABLE") {
-    return "";
-  }
-  if (slot.status === "PENDING") {
-    return "";
-  }
-  if (slot.status === "APPROVED") {
-    return "";
-  }
-  return "";
-}
+function buildAgendaSlotInnerHtml(day, slot, supportsDuration, durationMinutes, rangeSelection) {
+  const startTime = escapeHtml(String(slot.startIso || "").slice(11, 16));
+  const endTime = escapeHtml(computeSlotRangeEnd(selectedSlot ? selectedSlot.startIso : slot.startIso, durationMinutes));
+  const durationLabel = escapeHtml(formatDurationLabel(durationMinutes));
 
-function buildAgendaSlotInnerHtml(slot, supportsDuration, durationMinutes, inSelectedRange, isSelectedStart) {
-  const text = getAgendaSlotCellText(slot, supportsDuration, durationMinutes, inSelectedRange, isSelectedStart);
-  return '<span class="agenda-slot-indicator" aria-hidden="true"></span><span class="agenda-slot-text">' + escapeHtml(text) + "</span>";
+  if (rangeSelection.isSingle) {
+    return [
+      '<span class="agenda-range-time agenda-range-time-start">', startTime, "</span>",
+      '<span class="agenda-range-duration">', durationLabel, "</span>",
+      '<span class="agenda-range-time agenda-range-time-end">', escapeHtml(computeSlotRangeEnd(slot.startIso, durationMinutes)), "</span>"
+    ].join("");
+  }
+
+  if (rangeSelection.isStart) {
+    return [
+      '<span class="agenda-range-time agenda-range-time-start">', startTime, "</span>",
+      '<span class="agenda-range-duration">', durationLabel, "</span>"
+    ].join("");
+  }
+
+  if (rangeSelection.isEnd) {
+    return '<span class="agenda-range-time agenda-range-time-end">' + endTime + "</span>";
+  }
+
+  if (rangeSelection.isMiddle) {
+    return '<span class="agenda-range-fill" aria-hidden="true"></span>';
+  }
+
+  if (slot.status === "PENDING" || slot.status === "APPROVED") {
+    return '<span class="agenda-slot-indicator" aria-hidden="true"></span>';
+  }
+
+  return "";
 }
 
 function buildAgendaSlotTitle(day, slot, supportsDuration, durationMinutes) {
@@ -734,6 +755,12 @@ function formatDurationLabel(durationMinutes) {
   return String(durationMinutes) + " min";
 }
 
+function computeSlotRangeEnd(startIso, durationMinutes) {
+  const endDate = new Date(startIso);
+  endDate.setMinutes(endDate.getMinutes() + durationMinutes);
+  return String(endDate.getHours()).padStart(2, "0") + ":" + String(endDate.getMinutes()).padStart(2, "0");
+}
+
 function updateSelectedSlotLabel() {
   if (!selectedSlot) {
     document.getElementById("selectedSlotLabel").textContent = "Ninguna";
@@ -773,6 +800,50 @@ function isSlotInsideSelectedRange(slotStartIso) {
 
   selectedEnd.setMinutes(selectedEnd.getMinutes() + durationMinutes);
   return slotStart >= selectedStart && slotStart < selectedEnd;
+}
+
+function getRangeSelectionState(day, slot, durationMinutes) {
+  if (!selectedSlot) {
+    return {
+      inRange: false,
+      isStart: false,
+      isMiddle: false,
+      isEnd: false,
+      isSingle: false
+    };
+  }
+
+  const daySlots = Array.isArray(day && day.slots) ? day.slots : [];
+  const selectedIndex = daySlots.findIndex(function (item) {
+    return item.startIso === selectedSlot.startIso;
+  });
+  const currentIndex = daySlots.findIndex(function (item) {
+    return item.startIso === slot.startIso;
+  });
+  const slotMinutes = Number(boot && boot.config && boot.config.slotMinutes ? boot.config.slotMinutes : 30);
+  const requiredSlots = Math.max(1, Math.ceil(durationMinutes / slotMinutes));
+
+  if (selectedIndex < 0 || currentIndex < 0) {
+    return {
+      inRange: false,
+      isStart: false,
+      isMiddle: false,
+      isEnd: false,
+      isSingle: false
+    };
+  }
+
+  const relativeIndex = currentIndex - selectedIndex;
+  const inRange = relativeIndex >= 0 && relativeIndex < requiredSlots;
+  const isSingle = inRange && requiredSlots === 1;
+
+  return {
+    inRange: inRange,
+    isStart: inRange && relativeIndex === 0 && requiredSlots > 1,
+    isMiddle: inRange && relativeIndex > 0 && relativeIndex < requiredSlots - 1,
+    isEnd: inRange && relativeIndex === requiredSlots - 1 && requiredSlots > 1,
+    isSingle: isSingle
+  };
 }
 
 function renderDurationHint() {
