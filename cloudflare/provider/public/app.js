@@ -915,7 +915,7 @@ function renderAppointments(appointments) {
 
 async function requestAppointment() {
   const activeToken = getActiveSessionToken();
-  if (!providerState || !activeToken) {
+  if (!providerState) {
     renderRequestFeedback("Primero inicia sesión con una cuenta válida.", "error");
     showMessage("Primero inicia sesi\u00f3n con una cuenta v\u00e1lida.", "error");
     return;
@@ -937,10 +937,14 @@ async function requestAppointment() {
   showMessage("Registrando tu solicitud de cita...", "loading");
 
   try {
-    sessionToken = activeToken;
+    if (activeToken) {
+      sessionToken = activeToken;
+    }
     const response = await api("requestAppointment", {
-      sessionToken: activeToken,
+      sessionToken: activeToken || "",
       providerId: providerState.providerId,
+      vendorCode: providerState.vendorCode,
+      email: providerState.email,
       startIso: selectedSlot.startIso,
       durationMinutes: getSelectedDurationMinutes(),
       ocNumber: document.getElementById("appointmentOc").value,
