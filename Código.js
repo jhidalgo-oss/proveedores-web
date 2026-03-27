@@ -1435,6 +1435,20 @@ function getPendingPurchaseOrdersByTaxId_(taxId) {
   );
 }
 
+function getPendingPurchaseOrdersByPoNumber_(poNumber) {
+  var poDigits = digitsOnly_(poNumber);
+  if (!poDigits) {
+    return [];
+  }
+
+  return summarizePurchaseOrders_(
+    getSheetData_(APP_DEFAULTS.sheets.sapOpenOrders)
+      .filter(function(row) {
+        return digitsOnly_(row.poNumber) === poDigits && isEligibleOpenOrderRow_(row);
+      })
+  );
+}
+
 function getPendingPurchaseOrderForVendor_(vendorCode, poNumber) {
   var poDigits = digitsOnly_(poNumber);
   if (!poDigits) {
@@ -1451,6 +1465,9 @@ function getPendingPurchaseOrdersForProvider_(provider) {
   if (!orders.length && provider.taxId) {
     orders = getPendingPurchaseOrdersByTaxId_(provider.taxId);
   }
+  if (!orders.length && provider.ocNumber) {
+    orders = reconcileProviderFromOpenOrder_(provider, getPendingPurchaseOrdersByPoNumber_(provider.ocNumber));
+  }
   return orders;
 }
 
@@ -1460,6 +1477,39 @@ function getPendingPurchaseOrderForProvider_(provider, poNumber) {
   return orders.find(function(row) {
     return digitsOnly_(row.poNumber) === poDigits;
   }) || null;
+}
+
+function reconcileProviderFromOpenOrder_(provider, openOrders) {
+  if (!provider || !openOrders || !openOrders.length) {
+    return openOrders || [];
+  }
+
+  var first = openOrders[0];
+  var changed = false;
+
+  if (first.vendorCode && !sameText_(provider.sapVendorCode, first.vendorCode)) {
+    provider.sapVendorCode = first.vendorCode;
+    changed = true;
+  }
+  if (first.taxId && digitsOnly_(provider.taxId) !== digitsOnly_(first.taxId)) {
+    provider.taxId = first.taxId;
+    changed = true;
+  }
+  if (first.vendorName && !String(provider.vendorName || '').trim()) {
+    provider.vendorName = first.vendorName;
+    changed = true;
+  }
+  if (first.poNumber && !sameText_(provider.ocNumber, first.poNumber)) {
+    provider.ocNumber = first.poNumber;
+    changed = true;
+  }
+
+  if (changed && provider.providerId && provider._rowNumber) {
+    provider.updatedAt = nowIso_();
+    saveRecord_(APP_DEFAULTS.sheets.providers, provider, 'providerId', provider._rowNumber);
+  }
+
+  return openOrders;
 }
 
 function isEligibleOpenOrderRow_(row) {
@@ -2161,8 +2211,8 @@ function requestAppointment(payload) {
   }
 
   var slotStart = parseLocalDateTime_(clean.startIso);
-  validateSlotRequest_(slotStart, durationMinutes);
   var durationMinutes = normalizeDurationMinutes_(clean.durationMinutes || getRuntimeConfig_().slotMinutes);
+  validateSlotRequest_(slotStart, durationMinutes);
   if (!isWithinSchedule_(slotStart, durationMinutes)) {
     throw new Error('El tiempo estimado supera el horario disponible para ese inicio.');
   }
