@@ -3,6 +3,7 @@ const SESSION_STORAGE_KEY = "providerPortalSessionToken";
 
 let boot = null;
 let providerState = null;
+let currentAccess = null;
 let selectedSlot = null;
 let appointmentsState = [];
 let pendingPurchaseOrdersState = [];
@@ -46,6 +47,7 @@ function wireEvents() {
   document.getElementById("appointmentOc").addEventListener("change", renderSelectedPurchaseOrderSummary);
   document.getElementById("appointmentOcSearch").addEventListener("input", renderPendingPurchaseOrders);
   document.getElementById("appointmentDuration").addEventListener("change", handleDurationChange);
+  document.getElementById("appointmentNotes").addEventListener("input", updateRequestAvailabilityState);
   document.querySelector('#registerForm input[name="ocNumber"]').addEventListener("blur", lookupRegistrationVendor);
   document.querySelector('#registerForm input[name="ocNumber"]').addEventListener("input", resetRegistrationLookupState);
   document.getElementById("forgotPasswordToggle").addEventListener("click", function () {
@@ -252,6 +254,9 @@ function handleAuthenticatedResponse(response) {
     localStorage.setItem(SESSION_STORAGE_KEY, sessionToken);
   }
   if (response.provider) {
+    setCurrentAccess(response.provider, sessionToken);
+  }
+  if (response.provider) {
     renderAuthenticatedShell(response.provider);
   }
   if (hasRenderableDashboard(response.dashboard)) {
@@ -296,6 +301,7 @@ function renderDashboard(data, options) {
   setAccessAuthenticatedMode(true);
   renderRequestFeedback("", "");
   providerState = data.provider;
+  setCurrentAccess(data.provider, sessionToken);
   appointmentsState = data.appointments || [];
   pendingPurchaseOrdersState = data.pendingPurchaseOrders || [];
   selectedSlot = null;
@@ -326,6 +332,7 @@ function renderDashboard(data, options) {
 
   renderAppointments(appointmentsState);
   renderPendingPurchaseOrders();
+  updateRequestAvailabilityState();
 
   const panel = document.getElementById("appointmentPanel");
   if (data.canRequestAppointments && data.calendar) {
@@ -344,6 +351,7 @@ function renderAuthenticatedShell(provider) {
   setAccessAuthenticatedMode(true);
   renderRequestFeedback("", "");
   providerState = provider;
+  setCurrentAccess(provider, sessionToken);
   document.getElementById("guestAccessBlock").classList.add("hidden");
   document.getElementById("accountPanel").classList.remove("hidden");
   syncAccountIdentity(provider);
@@ -355,6 +363,7 @@ function renderAuthenticatedShell(provider) {
     "<p>C\u00f3digo de proveedor: " + escapeHtml(provider.vendorCode || "") + " | Correo: " + escapeHtml(provider.email || "") + "</p>"
   ].join("");
   renderPersistentWarning("");
+  updateRequestAvailabilityState();
 }
 
 function renderPendingPurchaseOrders() {
@@ -397,12 +406,14 @@ function renderPendingPurchaseOrders() {
   if (!openOrders.length) {
     summary.classList.remove("hidden");
     summary.innerHTML = "<p>No tienes OCs abiertas habilitadas para solicitar cita. La OC debe tener area y material definidos en SAP.</p>";
+    updateRequestAvailabilityState();
     return;
   }
 
   if (openOrders.length && !filteredOrders.length) {
     summary.classList.remove("hidden");
     summary.innerHTML = "<p>No encontramos OCs que coincidan con tu b\u00fasqueda.</p>";
+    updateRequestAvailabilityState();
     return;
   }
 
@@ -422,6 +433,7 @@ function renderSelectedPurchaseOrderSummary() {
       summary.innerHTML = "";
     }
     renderRequestFeedback("", "");
+    updateRequestAvailabilityState();
     return;
   }
 
@@ -436,6 +448,7 @@ function renderSelectedPurchaseOrderSummary() {
     "<p><strong>Resumen:</strong> " + escapeHtml(selected.itemsSummary || "Sin detalle de materiales") + "</p>"
   ].join("");
   renderRequestFeedback("", "");
+  updateRequestAvailabilityState();
 }
 
 function formatQuantity(value, uom) {
@@ -473,6 +486,7 @@ function handleDurationChange() {
   }
   renderDurationHint();
   renderCurrentCalendarWeek();
+  updateRequestAvailabilityState();
 }
 
 function renderCurrentCalendarWeek() {
@@ -603,6 +617,7 @@ function renderCurrentCalendarWeek() {
       selectedSlot = slot;
       updateSelectedSlotLabel();
       renderCurrentCalendarWeek();
+      updateRequestAvailabilityState();
     });
     cell.appendChild(button);
     grid.appendChild(cell);
@@ -932,9 +947,10 @@ function formatDisplayDate(value) {
 
 async function requestAppointment() {
   const activeToken = getActiveSessionToken();
-  const accountIdentity = getAccountIdentity();
-  const identity = providerState || accountIdentity;
-  if (!identity) {
+  const access = getCurrentAccess();
+  const selectedOc = document.getElementById("appointmentOc").value;
+
+  if (!access || (!access.providerId && !access.vendorCode && !access.email)) {
     renderRequestFeedback("Primero inicia sesión con una cuenta válida.", "error");
     hideGlobalMessage();
     return;
@@ -944,7 +960,7 @@ async function requestAppointment() {
     hideGlobalMessage();
     return;
   }
-  if (!document.getElementById("appointmentOc").value) {
+  if (!selectedOc) {
     renderRequestFeedback("Selecciona una OC abierta para continuar.", "error");
     hideGlobalMessage();
     document.getElementById("appointmentOc").focus();
@@ -961,28 +977,34 @@ async function requestAppointment() {
     }
     const response = await api("requestAppointment", {
       sessionToken: activeToken || "",
-      providerId: identity.providerId || "",
-      vendorCode: identity.vendorCode || "",
-      email: identity.email || "",
+      providerId: access.providerId || "",
+      vendorCode: access.vendorCode || "",
+      email: access.email || "",
       startIso: selectedSlot.startIso,
       durationMinutes: getSelectedDurationMinutes(),
-      ocNumber: document.getElementById("appointmentOc").value,
+      ocNumber: selectedOc,
       notes: document.getElementById("appointmentNotes").value
     });
-    renderRequestFeedback(response.message, "success");
+
+    hideGlobalMessage();
+    renderRequestFeedback(response.message || "Tu solicitud de cita fue registrada correctamente.", "success");
+
     try {
       await refreshDashboard({ preserveShell: true });
-      hideGlobalMessage();
-      renderRequestFeedback("", "");
+      renderRequestFeedback("Tu solicitud de cita fue registrada correctamente.", "success");
     } catch (error) {
-      renderRequestFeedback(response.message + " Si no ves el cambio de inmediato, actualiza el panel nuevamente.", "success");
-      hideGlobalMessage();
+      renderRequestFeedback("La cita fue registrada. Si no ves el cambio de inmediato, actualiza el panel nuevamente.", "success");
     }
+
+    setTimeout(function () {
+      renderRequestFeedback("", "");
+    }, 2400);
   } catch (error) {
     renderRequestFeedback(error.message || "No pudimos registrar tu solicitud en este momento. Intenta nuevamente en unos minutos.", "error");
     hideGlobalMessage();
   } finally {
     releaseBusy();
+    updateRequestAvailabilityState();
   }
 }
 
@@ -997,6 +1019,7 @@ function clearSession() {
   sessionToken = "";
   localStorage.removeItem(SESSION_STORAGE_KEY);
   syncAccountIdentity(null);
+  currentAccess = null;
 }
 
 function getActiveSessionToken() {
@@ -1035,6 +1058,54 @@ function getAccountIdentity() {
     vendorCode: vendorCode,
     email: email
   };
+}
+
+function setCurrentAccess(provider, token) {
+  const identity = provider || getAccountIdentity();
+  if (!identity) {
+    currentAccess = null;
+    return;
+  }
+  currentAccess = {
+    providerId: String(identity.providerId || "").trim(),
+    vendorCode: String(identity.vendorCode || "").trim(),
+    email: String(identity.email || "").trim(),
+    sessionToken: String(token || getActiveSessionToken() || "").trim()
+  };
+}
+
+function getCurrentAccess() {
+  if (currentAccess && (currentAccess.providerId || currentAccess.vendorCode || currentAccess.email)) {
+    currentAccess.sessionToken = String(getActiveSessionToken() || currentAccess.sessionToken || "").trim();
+    return currentAccess;
+  }
+  const fallback = getAccountIdentity();
+  if (!fallback) {
+    return null;
+  }
+  currentAccess = {
+    providerId: fallback.providerId || "",
+    vendorCode: fallback.vendorCode || "",
+    email: fallback.email || "",
+    sessionToken: String(getActiveSessionToken() || "").trim()
+  };
+  return currentAccess;
+}
+
+function updateRequestAvailabilityState() {
+  const button = document.getElementById("requestAppointmentButton");
+  if (!button) {
+    return;
+  }
+  const access = getCurrentAccess();
+  const hasIdentity = Boolean(access && (access.providerId || access.vendorCode || access.email));
+  const hasSlot = Boolean(selectedSlot);
+  const hasOc = Boolean(document.getElementById("appointmentOc").value);
+  button.disabled = !(hasIdentity && hasSlot && hasOc);
+  button.classList.toggle("is-disabled", button.disabled);
+  if (!button.disabled) {
+    renderRequestFeedback("", "");
+  }
 }
 
 function togglePanel(panelId) {
@@ -1360,6 +1431,7 @@ function defaultActionError(action) {
 
 function resetProviderView() {
   providerState = null;
+  currentAccess = null;
   appointmentsState = [];
   pendingPurchaseOrdersState = [];
   selectedSlot = null;
@@ -1384,6 +1456,8 @@ function resetProviderView() {
   document.getElementById("appointmentOcSummary").innerHTML = "";
   hideAccessMessage();
   renderPersistentWarning("");
+  renderRequestFeedback("", "");
+  updateRequestAvailabilityState();
 }
 
 function setAccessAuthenticatedMode(isAuthenticated) {
@@ -1432,6 +1506,8 @@ function collapseDashboardPanels() {
   document.getElementById("appointmentOcSearch").value = "";
   document.getElementById("appointmentOcSummary").classList.add("hidden");
   document.getElementById("appointmentOcSummary").innerHTML = "";
+  renderRequestFeedback("", "");
+  updateRequestAvailabilityState();
 }
 
 function renderPersistentWarning(message) {
