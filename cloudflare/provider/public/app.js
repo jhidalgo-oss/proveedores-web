@@ -658,7 +658,7 @@ function buildAgendaSlotInnerHtml(day, slot, supportsDuration, durationMinutes, 
   }
 
   if (rangeSelection.isMiddle) {
-    return '<span class="agenda-range-connector" aria-hidden="true">a</span>';
+    return '<span class="agenda-range-fill" aria-hidden="true"></span>';
   }
 
   if (slot.status === "PENDING" || slot.status === "APPROVED") {
