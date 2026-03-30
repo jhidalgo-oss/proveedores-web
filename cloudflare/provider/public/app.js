@@ -987,14 +987,27 @@ async function requestAppointment() {
     });
 
     hideGlobalMessage();
-    renderRequestFeedback(response.message || "Tu solicitud de cita fue registrada correctamente.", "success");
+    const successMessage = response.message || "Tu solicitud de cita fue registrada correctamente.";
+    const createdAppointment = response.appointment || null;
+
+    if (createdAppointment) {
+      appointmentsState = mergeAppointmentIntoState(createdAppointment, appointmentsState);
+      renderAppointments(appointmentsState);
+    }
 
     try {
       await refreshDashboard({ preserveShell: true });
-      renderRequestFeedback("Tu solicitud de cita fue registrada correctamente.", "success");
+      renderRequestFeedback(successMessage, "success");
     } catch (error) {
-      renderRequestFeedback("La cita fue registrada. Si no ves el cambio de inmediato, actualiza el panel nuevamente.", "success");
+      renderRequestFeedback("La cita fue registrada correctamente. Si no ves el cambio completo de inmediato, actualiza el panel nuevamente.", "success");
     }
+
+    selectedSlot = null;
+    document.getElementById("selectedSlotLabel").textContent = "Ninguna";
+    document.getElementById("appointmentNotes").value = "";
+    renderDurationHint();
+    renderCalendarSelection();
+    updateRequestAvailabilityState();
 
     setTimeout(function () {
       renderRequestFeedback("", "");
@@ -1006,6 +1019,26 @@ async function requestAppointment() {
     releaseBusy();
     updateRequestAvailabilityState();
   }
+}
+
+function mergeAppointmentIntoState(appointment, currentList) {
+  const list = Array.isArray(currentList) ? currentList.slice() : [];
+  const appointmentId = String(appointment && appointment.appointmentId || "").trim();
+  if (!appointmentId) {
+    return list;
+  }
+
+  const nextList = list.filter(function (row) {
+    return String(row && row.appointmentId || "").trim() !== appointmentId;
+  });
+
+  nextList.unshift(appointment);
+  nextList.sort(function (left, right) {
+    const leftValue = String((left && left.effectiveStart) || (left && left.requestedStart) || "");
+    const rightValue = String((right && right.effectiveStart) || (right && right.requestedStart) || "");
+    return rightValue.localeCompare(leftValue);
+  });
+  return nextList;
 }
 
 function logout() {
