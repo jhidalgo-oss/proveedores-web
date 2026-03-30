@@ -1,4 +1,4 @@
-const DEFAULT_APPS_SCRIPT_PROVIDER_API_URL = "https://script.google.com/macros/s/AKfycbwv4a8FTgbEpa9NuGRxgNFHzi1Q-lir-KagFXujLHiPkr_AMQuvvXBVBA_aQ3mPv1qT/exec";
+const DEFAULT_APPS_SCRIPT_PROVIDER_API_URL = "https://script.google.com/macros/s/AKfycbzz7emGORk7cndKMSIAsOICyZ9ROyDBX9SkXM4iVm02KA0KAIePqJjXrDqs9u_V8imA/exec";
 
 export async function proxyAction(context, forcedAction) {
   const { request, env, params } = context;

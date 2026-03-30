@@ -1468,6 +1468,9 @@ function getPendingPurchaseOrdersForProvider_(provider) {
   if (!orders.length && provider.ocNumber) {
     orders = reconcileProviderFromOpenOrder_(provider, getPendingPurchaseOrdersByPoNumber_(provider.ocNumber));
   }
+  if (!orders.length) {
+    orders = reconcileProviderFromAppointments_(provider);
+  }
   return orders;
 }
 
@@ -1510,6 +1513,40 @@ function reconcileProviderFromOpenOrder_(provider, openOrders) {
   }
 
   return openOrders;
+}
+
+function reconcileProviderFromAppointments_(provider) {
+  if (!provider || !provider.providerId) {
+    return [];
+  }
+
+  var appointments = getProviderAppointments_(provider.providerId);
+  if (!appointments.length) {
+    return [];
+  }
+
+  appointments.sort(function(a, b) {
+    return String(b.requestedAt || '').localeCompare(String(a.requestedAt || ''));
+  });
+
+  var recoveredOrders = [];
+  appointments.some(function(appointment) {
+    if (appointment.sapVendorCode) {
+      recoveredOrders = getPendingPurchaseOrdersForVendor_(appointment.sapVendorCode);
+      if (recoveredOrders.length) {
+        return true;
+      }
+    }
+    if (appointment.ocNumber) {
+      recoveredOrders = getPendingPurchaseOrdersByPoNumber_(appointment.ocNumber);
+      if (recoveredOrders.length) {
+        return true;
+      }
+    }
+    return false;
+  });
+
+  return reconcileProviderFromOpenOrder_(provider, recoveredOrders);
 }
 
 function isEligibleOpenOrderRow_(row) {
@@ -2249,6 +2286,7 @@ function requestAppointment(payload) {
     notes: clean.notes
   };
   applyPurchaseOrderSnapshot_(appointment, selectedOpenOrder);
+  reconcileProviderFromOpenOrder_(provider, [selectedOpenOrder]);
 
   saveRecord_(APP_DEFAULTS.sheets.appointments, appointment, 'appointmentId');
   audit_('CITA_SOLICITADA', appointment.appointmentId, provider.email, appointment.slotLabel);

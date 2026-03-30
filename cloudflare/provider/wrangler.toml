@@ -3,4 +3,4 @@ compatibility_date = "2026-03-24"
 pages_build_output_dir = "./public"
 
 [vars]
-APPS_SCRIPT_PROVIDER_API_URL = "https://script.google.com/macros/s/AKfycbwv4a8FTgbEpa9NuGRxgNFHzi1Q-lir-KagFXujLHiPkr_AMQuvvXBVBA_aQ3mPv1qT/exec"
+APPS_SCRIPT_PROVIDER_API_URL = "https://script.google.com/macros/s/AKfycbzz7emGORk7cndKMSIAsOICyZ9ROyDBX9SkXM4iVm02KA0KAIePqJjXrDqs9u_V8imA/exec"
