@@ -997,6 +997,10 @@ async function requestAppointment() {
 
     try {
       await refreshDashboard({ preserveShell: true });
+      if (createdAppointment) {
+        appointmentsState = mergeAppointmentIntoState(createdAppointment, appointmentsState);
+        renderAppointments(appointmentsState);
+      }
       renderRequestFeedback(successMessage, "success");
     } catch (error) {
       renderRequestFeedback("La cita fue registrada correctamente. Si no ves el cambio completo de inmediato, actualiza el panel nuevamente.", "success");
@@ -1011,7 +1015,7 @@ async function requestAppointment() {
 
     setTimeout(function () {
       renderRequestFeedback("", "");
-    }, 2400);
+    }, 6000);
   } catch (error) {
     renderRequestFeedback(error.message || "No pudimos registrar tu solicitud en este momento. Intenta nuevamente en unos minutos.", "error");
     hideGlobalMessage();
