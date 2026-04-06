@@ -1013,19 +1013,14 @@ async function requestAppointment() {
     renderDurationHint();
     renderCalendarSelection();
     updateRequestAvailabilityState();
-    renderRequestFeedback(successMessage, "success");
+    renderRequestFeedback(
+      createdAppointment
+        ? "Tu solicitud de cita fue registrada correctamente y ya aparece en tu historial."
+        : successMessage,
+      "success"
+    );
 
-    try {
-      await refreshDashboard({ preserveShell: true });
-      if (createdAppointment) {
-        appointmentsState = mergeAppointmentIntoState(createdAppointment, appointmentsState);
-        renderAppointments(appointmentsState);
-      }
-    } catch (error) {
-      if (runId === requestAppointmentRunId) {
-        renderRequestFeedback("La cita fue registrada correctamente. Si no ves el cambio completo de inmediato, actualiza el panel nuevamente.", "success");
-      }
-    }
+    queueProviderDashboardSync();
 
   } catch (error) {
     if (runId === requestAppointmentRunId) {
@@ -1039,6 +1034,14 @@ async function requestAppointment() {
     }
     updateRequestAvailabilityState();
   }
+}
+
+function queueProviderDashboardSync() {
+  window.setTimeout(function () {
+    refreshDashboard({ preserveShell: true }).catch(function (error) {
+      console.warn("No pudimos sincronizar el dashboard después de registrar la cita.", error);
+    });
+  }, 1500);
 }
 
 function buildAppointmentRequestAccess() {
