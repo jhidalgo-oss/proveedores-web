@@ -947,7 +947,7 @@ function formatDisplayDate(value) {
 
 async function requestAppointment() {
   const activeToken = getActiveSessionToken();
-  const access = getCurrentAccess();
+  const access = getResolvedRequestAccess();
   const selectedOc = document.getElementById("appointmentOc").value;
 
   if (!access || (!access.providerId && !access.vendorCode && !access.email)) {
@@ -975,6 +975,7 @@ async function requestAppointment() {
     if (activeToken) {
       sessionToken = activeToken;
     }
+    hideAccessMessage();
     const response = await api("requestAppointment", {
       sessionToken: activeToken || "",
       providerId: access.providerId || "",
@@ -1078,20 +1079,31 @@ function syncAccountIdentity(provider) {
 
 function getAccountIdentity() {
   const panel = document.getElementById("accountPanel");
-  if (!panel) {
-    return null;
+  if (panel) {
+    const providerId = String(panel.dataset.providerId || "").trim();
+    const vendorCode = String(panel.dataset.vendorCode || "").trim();
+    const email = String(panel.dataset.email || "").trim();
+    if (providerId || vendorCode || email) {
+      return {
+        providerId: providerId,
+        vendorCode: vendorCode,
+        email: email
+      };
+    }
   }
-  const providerId = String(panel.dataset.providerId || "").trim();
-  const vendorCode = String(panel.dataset.vendorCode || "").trim();
-  const email = String(panel.dataset.email || "").trim();
-  if (!providerId && !vendorCode && !email) {
-    return null;
+  if (providerState) {
+    const providerId = String(providerState.providerId || "").trim();
+    const vendorCode = String(providerState.vendorCode || "").trim();
+    const email = String(providerState.email || "").trim();
+    if (providerId || vendorCode || email) {
+      return {
+        providerId: providerId,
+        vendorCode: vendorCode,
+        email: email
+      };
+    }
   }
-  return {
-    providerId: providerId,
-    vendorCode: vendorCode,
-    email: email
-  };
+  return null;
 }
 
 function setCurrentAccess(provider, token) {
@@ -1124,6 +1136,27 @@ function getCurrentAccess() {
     sessionToken: String(getActiveSessionToken() || "").trim()
   };
   return currentAccess;
+}
+
+function getResolvedRequestAccess() {
+  const access = getCurrentAccess();
+  if (access && (access.providerId || access.vendorCode || access.email)) {
+    return access;
+  }
+  if (providerState) {
+    const fallback = {
+      providerId: String(providerState.providerId || "").trim(),
+      vendorCode: String(providerState.vendorCode || "").trim(),
+      email: String(providerState.email || "").trim(),
+      sessionToken: String(getActiveSessionToken() || "").trim()
+    };
+    if (fallback.providerId || fallback.vendorCode || fallback.email) {
+      currentAccess = fallback;
+      syncAccountIdentity(fallback);
+      return fallback;
+    }
+  }
+  return null;
 }
 
 function updateRequestAvailabilityState() {
