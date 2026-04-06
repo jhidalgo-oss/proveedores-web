@@ -25,39 +25,64 @@ export async function proxyAction(context, forcedAction) {
   }
 
   const upstreamUrl = env.APPS_SCRIPT_PROVIDER_API_URL || DEFAULT_APPS_SCRIPT_PROVIDER_API_URL;
-  let upstreamResponse = await fetch(`${upstreamUrl}?action=${encodeURIComponent(action)}`, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json"
-    },
-    body: JSON.stringify({
-      action,
-      ...payload
-    }),
-    redirect: "manual"
-  });
+  let upstreamResponse;
+  try {
+    upstreamResponse = await fetch(`${upstreamUrl}?action=${encodeURIComponent(action)}`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        action,
+        ...payload
+      }),
+      redirect: "manual"
+    });
+  } catch (networkError) {
+    console.error("Network error connecting to Apps Script", networkError);
+    return json({
+      ok: false,
+      error: "Error de red al conectar con el servidor de citas."
+    }, 502);
+  }
 
   if (isRedirectStatus(upstreamResponse.status)) {
     const redirectUrl = upstreamResponse.headers.get("location");
     if (redirectUrl) {
-      upstreamResponse = await fetch(redirectUrl, {
-        method: "GET",
-        headers: {
-          "accept": "application/json"
-        },
-        redirect: "follow"
-      });
+      try {
+        upstreamResponse = await fetch(redirectUrl, {
+          method: "GET",
+          headers: {
+            "accept": "application/json"
+          },
+          redirect: "follow"
+        });
+      } catch (redirectError) {
+        return json({
+          ok: false,
+          error: "El servidor de Google redirigió la petición de forma inesperada."
+        }, 502);
+      }
     }
   }
 
-  const text = await upstreamResponse.text();
+  let text = "";
+  try {
+    text = await upstreamResponse.text();
+  } catch (readError) {
+    return json({
+      ok: false,
+      error: "No se pudo leer la respuesta del servidor."
+    }, 502);
+  }
   const contentType = upstreamResponse.headers.get("content-type") || "";
 
-  if (!contentType.includes("application/json")) {
+  if (!contentType.includes("application/json") || text.trim().charAt(0) !== "{") {
     console.warn("Apps Script upstream did not return JSON", {
       action,
       upstreamStatus: upstreamResponse.status,
-      contentType
+      contentType,
+      textSnippet: text.substring(0, 200)
     });
 
     return json({

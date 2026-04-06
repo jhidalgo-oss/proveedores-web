@@ -959,7 +959,7 @@ async function requestAppointment() {
   }
   requestAppointmentInFlight = true;
   const runId = ++requestAppointmentRunId;
-  const activeToken = getActiveSessionToken();
+  const activeToken = String(localStorage.getItem(SESSION_STORAGE_KEY) || getActiveSessionToken() || "").trim();
   const access = buildAppointmentRequestAccess();
   const selectedOc = document.getElementById("appointmentOc").value;
   if (!selectedSlot) {
@@ -973,7 +973,7 @@ async function requestAppointment() {
     requestAppointmentInFlight = false;
     return;
   }
-  if (!access) {
+  if (!activeToken && !access) {
     renderRequestFeedback("No pudimos identificar tu cuenta activa para registrar la cita. Cierra sesión e ingresa nuevamente.", "error");
     requestAppointmentInFlight = false;
     return;
@@ -1026,10 +1026,13 @@ async function requestAppointment() {
         : successMessage,
       "success"
     );
+    queueProviderDashboardSync();
 
   } catch (error) {
     if (runId === requestAppointmentRunId) {
-      const message = error.message || "No pudimos registrar tu solicitud en este momento. Intenta nuevamente en unos minutos.";
+      const message = error && typeof error.message === "string" && error.message.trim()
+        ? error.message
+        : "Ocurrió un error de conexión o la solicitud tardó demasiado. Intenta nuevamente.";
       renderRequestFeedback(message, "error");
     }
   } finally {
@@ -1523,15 +1526,25 @@ function downloadAppointment(appointmentId) {
 }
 
 async function api(action, payload) {
-  const response = await fetch(API_BASE + "/" + action, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json"
-    },
-    body: JSON.stringify(payload || {})
-  });
+  let response;
+  try {
+    response = await fetch(API_BASE + "/" + action, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json"
+      },
+      body: JSON.stringify(payload || {})
+    });
+  } catch (error) {
+    throw new Error(defaultActionError(action));
+  }
 
-  const text = await response.text();
+  let text = "";
+  try {
+    text = await response.text();
+  } catch (error) {
+    throw new Error(defaultActionError(action));
+  }
   let data;
 
   try {
