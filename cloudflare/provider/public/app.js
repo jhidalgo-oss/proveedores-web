@@ -955,15 +955,12 @@ async function requestAppointment() {
   requestAppointmentInFlight = true;
   const runId = ++requestAppointmentRunId;
   const activeToken = getActiveSessionToken();
-  const access = buildAppointmentRequestAccess();
+  const access = buildAppointmentRequestAccess() || {
+    providerId: "",
+    vendorCode: "",
+    email: ""
+  };
   const selectedOc = document.getElementById("appointmentOc").value;
-
-  if (!access || (!access.providerId && !access.vendorCode && !access.email)) {
-    renderRequestFeedback("No pudimos identificar la cuenta activa para esta solicitud. Cierra sesión e ingresa nuevamente.", "error");
-    hideGlobalMessage();
-    requestAppointmentInFlight = false;
-    return;
-  }
   if (!selectedSlot) {
     renderRequestFeedback("Selecciona una hora de inicio disponible.", "error");
     hideGlobalMessage();
@@ -1323,6 +1320,13 @@ function updateRequestAvailabilityState() {
   const hasOc = Boolean(document.getElementById("appointmentOc").value);
   button.disabled = !(hasIdentity && hasSlot && hasOc);
   button.classList.toggle("is-disabled", button.disabled);
+  if (hasIdentity && hasSlot && hasOc) {
+    const feedback = document.getElementById("requestFeedback");
+    const text = String(feedback && feedback.textContent || "").trim().toLowerCase();
+    if (text.indexOf("inicia sesión") >= 0 || text.indexOf("inicia sesion") >= 0 || text.indexOf("cuenta válida") >= 0 || text.indexOf("cuenta valida") >= 0) {
+      renderRequestFeedback("", "");
+    }
+  }
 }
 
 function togglePanel(panelId) {
