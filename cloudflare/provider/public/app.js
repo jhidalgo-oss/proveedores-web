@@ -299,6 +299,8 @@ function renderDashboard(data, options) {
     return;
   }
 
+  hideGlobalMessage();
+  hideAccessMessage();
   activateTab("loginPanel");
   setAccessAuthenticatedMode(true);
   providerState = data.provider;
@@ -349,6 +351,8 @@ function renderAuthenticatedShell(provider) {
   if (!provider) {
     return;
   }
+  hideGlobalMessage();
+  hideAccessMessage();
   activateTab("loginPanel");
   setAccessAuthenticatedMode(true);
   providerState = provider;
@@ -374,6 +378,7 @@ function renderPendingPurchaseOrders() {
   const summary = document.getElementById("appointmentOcSummary");
   const searchValue = String(document.getElementById("appointmentOcSearch").value || "").trim().toLowerCase();
   const currentValue = select.value;
+  hideGlobalMessage();
   select.innerHTML = '<option value="">Selecciona una OC abierta</option>';
 
   const filteredOrders = openOrders.filter(function (order) {
@@ -428,6 +433,7 @@ function renderSelectedPurchaseOrderSummary() {
   const selected = pendingPurchaseOrdersState.find(function (item) {
     return item.poNumber === selectedPoNumber;
   });
+  hideGlobalMessage();
 
   if (!selected) {
     if (pendingPurchaseOrdersState.length) {
@@ -481,7 +487,7 @@ function handleDurationChange() {
     selectedSlot = null;
     document.getElementById("selectedSlotLabel").textContent = "Ninguna";
     if (hadSelection) {
-      showMessage("La nueva duración ya no cabe en el horario que habías elegido. Selecciona otro inicio.", "error");
+      renderRequestFeedback("La nueva duración ya no cabe en el horario que habías elegido. Selecciona otro inicio.", "error");
     }
   } else {
     updateSelectedSlotLabel();
@@ -612,7 +618,7 @@ function renderCurrentCalendarWeek() {
     }
     button.addEventListener("click", function () {
         if (!supportsDuration) {
-          showMessage("Ese inicio no tiene tiempo continuo suficiente para la descarga estimada.", "error");
+          renderRequestFeedback("Ese inicio no tiene tiempo continuo suficiente para la descarga estimada.", "error");
           return;
       }
       renderRequestFeedback("", "");
@@ -958,20 +964,17 @@ async function requestAppointment() {
   const selectedOc = document.getElementById("appointmentOc").value;
   if (!selectedSlot) {
     renderRequestFeedback("Selecciona una hora de inicio disponible.", "error");
-    showMessage("Selecciona una hora de inicio disponible.", "error");
     requestAppointmentInFlight = false;
     return;
   }
   if (!selectedOc) {
     renderRequestFeedback("Selecciona una OC abierta para continuar.", "error");
-    showMessage("Selecciona una OC abierta para continuar.", "error");
     document.getElementById("appointmentOc").focus();
     requestAppointmentInFlight = false;
     return;
   }
   if (!access) {
     renderRequestFeedback("No pudimos identificar tu cuenta activa para registrar la cita. Cierra sesión e ingresa nuevamente.", "error");
-    showMessage("No pudimos identificar tu cuenta activa para registrar la cita. Cierra sesión e ingresa nuevamente.", "error");
     requestAppointmentInFlight = false;
     return;
   }
@@ -1023,13 +1026,11 @@ async function requestAppointment() {
         : successMessage,
       "success"
     );
-    showMessage(successMessage, "success");
 
   } catch (error) {
     if (runId === requestAppointmentRunId) {
       const message = error.message || "No pudimos registrar tu solicitud en este momento. Intenta nuevamente en unos minutos.";
       renderRequestFeedback(message, "error");
-      showMessage(message, "error");
     }
   } finally {
     releaseBusy();
