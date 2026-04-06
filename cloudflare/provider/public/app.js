@@ -1013,9 +1013,6 @@ async function requestAppointment() {
     renderCalendarSelection();
     updateRequestAvailabilityState();
 
-    setTimeout(function () {
-      renderRequestFeedback("", "");
-    }, 6000);
   } catch (error) {
     renderRequestFeedback(error.message || "No pudimos registrar tu solicitud en este momento. Intenta nuevamente en unos minutos.", "error");
     hideGlobalMessage();
@@ -1140,9 +1137,6 @@ function updateRequestAvailabilityState() {
   const hasOc = Boolean(document.getElementById("appointmentOc").value);
   button.disabled = !(hasIdentity && hasSlot && hasOc);
   button.classList.toggle("is-disabled", button.disabled);
-  if (!button.disabled) {
-    renderRequestFeedback("", "");
-  }
 }
 
 function togglePanel(panelId) {
