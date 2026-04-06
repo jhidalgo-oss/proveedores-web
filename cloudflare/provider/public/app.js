@@ -289,9 +289,7 @@ function renderDashboard(data, options) {
   options = options || {};
   if (!data.found) {
     if (providerState) {
-      collapseDashboardPanels();
       renderPersistentWarning(data.message || "No pudimos terminar de cargar tu panel en este momento. Intenta actualizar nuevamente.");
-      showMessage("Tu sesi\u00f3n sigue activa, pero no pudimos actualizar el panel en este momento. Intenta nuevamente.", "error");
       return;
     }
 
@@ -997,6 +995,7 @@ async function requestAppointment() {
     });
 
     hideGlobalMessage();
+    renderPersistentWarning("");
     const successMessage = response.message || "Tu solicitud de cita fue registrada correctamente.";
     const createdAppointment = response.appointment || null;
     if (runId !== requestAppointmentRunId) {
@@ -1021,8 +1020,6 @@ async function requestAppointment() {
         : successMessage,
       "success"
     );
-
-    queueProviderDashboardSync();
 
   } catch (error) {
     if (runId === requestAppointmentRunId) {
@@ -1350,13 +1347,11 @@ function updateRequestAvailabilityState() {
   if (!button) {
     return;
   }
-  const access = getCurrentAccess();
-  const hasIdentity = Boolean(access && (access.providerId || access.vendorCode || access.email));
   const hasSlot = Boolean(selectedSlot);
   const hasOc = Boolean(document.getElementById("appointmentOc").value);
-  button.disabled = !(hasIdentity && hasSlot && hasOc);
+  button.disabled = !(hasSlot && hasOc) || requestAppointmentInFlight;
   button.classList.toggle("is-disabled", button.disabled);
-  if (hasIdentity && hasSlot && hasOc) {
+  if (hasSlot && hasOc) {
     const feedback = document.getElementById("requestFeedback");
     const text = String(feedback && feedback.textContent || "").trim().toLowerCase();
     if (text.indexOf("inicia sesión") >= 0 || text.indexOf("inicia sesion") >= 0 || text.indexOf("cuenta válida") >= 0 || text.indexOf("cuenta valida") >= 0) {
