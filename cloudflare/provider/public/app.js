@@ -14,6 +14,7 @@ let currentWeekIndex = 0;
 let messageHideTimer = null;
 let requestAppointmentInFlight = false;
 let requestAppointmentRunId = 0;
+let optimisticAppointmentsState = [];
 
 document.addEventListener("DOMContentLoaded", async function () {
   wireEvents();
@@ -302,10 +303,9 @@ function renderDashboard(data, options) {
 
   activateTab("loginPanel");
   setAccessAuthenticatedMode(true);
-  renderRequestFeedback("", "");
   providerState = data.provider;
   setCurrentAccess(data.provider, sessionToken);
-  appointmentsState = data.appointments || [];
+  appointmentsState = mergeAppointmentsState(data.appointments || [], optimisticAppointmentsState);
   pendingPurchaseOrdersState = data.pendingPurchaseOrders || [];
   selectedSlot = null;
   currentCalendarWeeks = [];
@@ -335,6 +335,7 @@ function renderDashboard(data, options) {
 
   renderAppointments(appointmentsState);
   renderPendingPurchaseOrders();
+  clearInvalidSessionRequestFeedbackIfReady();
   updateRequestAvailabilityState();
 
   const panel = document.getElementById("appointmentPanel");
@@ -352,7 +353,6 @@ function renderAuthenticatedShell(provider) {
   }
   activateTab("loginPanel");
   setAccessAuthenticatedMode(true);
-  renderRequestFeedback("", "");
   providerState = provider;
   setCurrentAccess(provider, sessionToken);
   document.getElementById("guestAccessBlock").classList.add("hidden");
@@ -366,6 +366,7 @@ function renderAuthenticatedShell(provider) {
     "<p>C\u00f3digo de proveedor: " + escapeHtml(provider.vendorCode || "") + " | Correo: " + escapeHtml(provider.email || "") + "</p>"
   ].join("");
   renderPersistentWarning("");
+  clearInvalidSessionRequestFeedbackIfReady();
   updateRequestAvailabilityState();
 }
 
@@ -1003,6 +1004,7 @@ async function requestAppointment() {
     }
 
     if (createdAppointment) {
+      optimisticAppointmentsState = mergeAppointmentIntoState(createdAppointment, optimisticAppointmentsState);
       appointmentsState = mergeAppointmentIntoState(createdAppointment, appointmentsState);
       renderAppointments(appointmentsState);
     }
@@ -1042,6 +1044,37 @@ function queueProviderDashboardSync() {
       console.warn("No pudimos sincronizar el dashboard después de registrar la cita.", error);
     });
   }, 1500);
+}
+
+function mergeAppointmentsState(baseAppointments, extraAppointments) {
+  let merged = Array.isArray(baseAppointments) ? baseAppointments.slice() : [];
+  (Array.isArray(extraAppointments) ? extraAppointments : []).forEach(function (appointment) {
+    merged = mergeAppointmentIntoState(appointment, merged);
+  });
+  return merged;
+}
+
+function clearInvalidSessionRequestFeedbackIfReady() {
+  const feedback = document.getElementById("requestFeedback");
+  if (!feedback) {
+    return;
+  }
+  const text = String(feedback.textContent || "").trim().toLowerCase();
+  if (!text) {
+    return;
+  }
+  const isSessionError =
+    text.indexOf("inicia sesión") >= 0 ||
+    text.indexOf("inicia sesion") >= 0 ||
+    text.indexOf("cuenta válida") >= 0 ||
+    text.indexOf("cuenta valida") >= 0;
+  if (!isSessionError) {
+    return;
+  }
+  const access = buildAppointmentRequestAccess();
+  if (access && (access.providerId || access.vendorCode || access.email)) {
+    renderRequestFeedback("", "");
+  }
 }
 
 function buildAppointmentRequestAccess() {
