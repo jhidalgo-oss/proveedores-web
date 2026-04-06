@@ -2489,17 +2489,18 @@ function normalizePasswordResetPayload_(payload) {
 function normalizeAppointmentRequest_(payload) {
   payload = payload || {};
   var email = String(payload.email || '').trim().toLowerCase();
-  var vendorCode = digitsOnly_(payload.vendorCode);
+  var providerId = String(payload.providerId || '').trim();
+  var vendorCode = normalizeProviderIdentifier_(payload.vendorCode);
   var ocNumber = digitsOnly_(payload.ocNumber || '');
   var startIso = String(payload.startIso || '').trim();
   var sessionToken = String(payload.sessionToken || '').trim();
   var durationMinutes = normalizeDurationMinutes_(payload.durationMinutes || '');
 
   if (!sessionToken) {
-    if (!vendorCode) {
-      throw new Error('Falta el codigo del proveedor.');
+    if (!providerId && !vendorCode) {
+      throw new Error('Falta la identificación del proveedor.');
     }
-    if (!email || !isValidEmail_(email)) {
+    if (!providerId && (!email || !isValidEmail_(email))) {
       throw new Error('Falta un correo valido.');
     }
   }
@@ -2511,7 +2512,7 @@ function normalizeAppointmentRequest_(payload) {
   }
 
   return {
-    providerId: String(payload.providerId || '').trim(),
+    providerId: providerId,
     vendorCode: vendorCode,
     email: email,
     ocNumber: ocNumber,
@@ -2580,6 +2581,7 @@ function buildProviderWarnings_(provider, pendingPurchaseOrders) {
 
 function findProvider_(criteria) {
   criteria = criteria || {};
+  var normalizedVendorCode = normalizeProviderIdentifier_(criteria.vendorCode);
   var providers = getSheetData_(APP_DEFAULTS.sheets.providers);
   return providers.find(function(row) {
     if (criteria.providerId && sameText_(row.providerId, criteria.providerId)) {
@@ -2588,13 +2590,13 @@ function findProvider_(criteria) {
     if (criteria.sapVendorCode && sameText_(row.sapVendorCode, criteria.sapVendorCode)) {
       return true;
     }
-    if (criteria.vendorCode && criteria.email) {
-      return sameText_(row.vendorCode, criteria.vendorCode) && sameText_(row.email, criteria.email);
+    if (normalizedVendorCode && criteria.email) {
+      return normalizeProviderIdentifier_(row.vendorCode) === normalizedVendorCode && sameText_(row.email, criteria.email);
     }
     if (criteria.taxId && digitsOnly_(row.taxId) === digitsOnly_(criteria.taxId)) {
       return true;
     }
-    if (criteria.vendorCode && sameText_(row.vendorCode, criteria.vendorCode)) {
+    if (normalizedVendorCode && normalizeProviderIdentifier_(row.vendorCode) === normalizedVendorCode) {
       return true;
     }
     if (criteria.email && sameText_(row.email, criteria.email)) {
