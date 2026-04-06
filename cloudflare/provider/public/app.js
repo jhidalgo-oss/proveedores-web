@@ -1,5 +1,6 @@
 const API_BASE = "/api";
 const SESSION_STORAGE_KEY = "providerPortalSessionToken";
+const ACCESS_STORAGE_KEY = "providerPortalAccessSnapshot";
 
 let boot = null;
 let providerState = null;
@@ -1066,37 +1067,91 @@ function mergeAppointmentIntoState(appointment, currentList) {
 }
 
 function logout() {
-  clearSession();
+  clearSession({ clearIdentity: true });
   resetProviderView();
   activateTab("loginPanel");
   showMessage("Tu sesi\u00f3n fue cerrada.", "success");
 }
 
-function clearSession() {
+function clearSession(options) {
+  options = options || {};
   sessionToken = "";
   localStorage.removeItem(SESSION_STORAGE_KEY);
-  syncAccountIdentity(null);
   currentAccess = null;
+  syncAccountIdentity(null, { clearSnapshot: Boolean(options.clearIdentity) });
 }
 
 function getActiveSessionToken() {
   return String(sessionToken || localStorage.getItem(SESSION_STORAGE_KEY) || "").trim();
 }
 
-function syncAccountIdentity(provider) {
+function persistAccessSnapshot(identity) {
+  if (!identity) {
+    localStorage.removeItem(ACCESS_STORAGE_KEY);
+    return;
+  }
+  const snapshot = {
+    providerId: String(identity.providerId || "").trim(),
+    vendorCode: String(identity.vendorCode || "").trim(),
+    email: String(identity.email || "").trim()
+  };
+  if (!snapshot.providerId && !snapshot.vendorCode && !snapshot.email) {
+    localStorage.removeItem(ACCESS_STORAGE_KEY);
+    return;
+  }
+  localStorage.setItem(ACCESS_STORAGE_KEY, JSON.stringify(snapshot));
+}
+
+function getPersistedAccessSnapshot() {
+  try {
+    const raw = String(localStorage.getItem(ACCESS_STORAGE_KEY) || "").trim();
+    if (!raw) {
+      return null;
+    }
+    const parsed = JSON.parse(raw);
+    const snapshot = {
+      providerId: String(parsed.providerId || "").trim(),
+      vendorCode: String(parsed.vendorCode || "").trim(),
+      email: String(parsed.email || "").trim()
+    };
+    if (!snapshot.providerId && !snapshot.vendorCode && !snapshot.email) {
+      return null;
+    }
+    return snapshot;
+  } catch (error) {
+    console.warn("No pudimos leer el snapshot local de acceso.", error);
+    localStorage.removeItem(ACCESS_STORAGE_KEY);
+    return null;
+  }
+}
+
+function syncAccountIdentity(provider, options) {
+  options = options || {};
+  if (!provider) {
+    const panel = document.getElementById("accountPanel");
+    if (panel) {
+      delete panel.dataset.providerId;
+      delete panel.dataset.vendorCode;
+      delete panel.dataset.email;
+    }
+    if (options.clearSnapshot) {
+      persistAccessSnapshot(null);
+    }
+    return;
+  }
+  const identity = {
+    providerId: String(provider.providerId || "").trim(),
+    vendorCode: String(provider.vendorCode || "").trim(),
+    email: String(provider.email || "").trim()
+  };
+  persistAccessSnapshot(identity);
   const panel = document.getElementById("accountPanel");
   if (!panel) {
     return;
   }
-  if (!provider) {
-    delete panel.dataset.providerId;
-    delete panel.dataset.vendorCode;
-    delete panel.dataset.email;
-    return;
-  }
-  panel.dataset.providerId = provider.providerId || "";
-  panel.dataset.vendorCode = provider.vendorCode || "";
-  panel.dataset.email = provider.email || "";
+  panel.dataset.providerId = identity.providerId;
+  panel.dataset.vendorCode = identity.vendorCode;
+  panel.dataset.email = identity.email;
 }
 
 function getAccountIdentity() {
@@ -1125,6 +1180,10 @@ function getAccountIdentity() {
       };
     }
   }
+  const snapshot = getPersistedAccessSnapshot();
+  if (snapshot) {
+    return snapshot;
+  }
   return null;
 }
 
@@ -1140,6 +1199,7 @@ function setCurrentAccess(provider, token) {
     email: String(identity.email || "").trim(),
     sessionToken: String(token || getActiveSessionToken() || "").trim()
   };
+  persistAccessSnapshot(currentAccess);
 }
 
 function getCurrentAccess() {
@@ -1177,6 +1237,17 @@ function getResolvedRequestAccess() {
       syncAccountIdentity(fallback);
       return fallback;
     }
+  }
+  const snapshot = getPersistedAccessSnapshot();
+  if (snapshot) {
+    currentAccess = {
+      providerId: snapshot.providerId || "",
+      vendorCode: snapshot.vendorCode || "",
+      email: snapshot.email || "",
+      sessionToken: String(getActiveSessionToken() || "").trim()
+    };
+    syncAccountIdentity(currentAccess);
+    return currentAccess;
   }
   return null;
 }
