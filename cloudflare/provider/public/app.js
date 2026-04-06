@@ -11,6 +11,8 @@ let sessionToken = "";
 let currentCalendarWeeks = [];
 let currentWeekIndex = 0;
 let messageHideTimer = null;
+let requestAppointmentInFlight = false;
+let requestAppointmentRunId = 0;
 
 document.addEventListener("DOMContentLoaded", async function () {
   wireEvents();
@@ -946,6 +948,11 @@ function formatDisplayDate(value) {
 }
 
 async function requestAppointment() {
+  if (requestAppointmentInFlight) {
+    return;
+  }
+  requestAppointmentInFlight = true;
+  const runId = ++requestAppointmentRunId;
   const activeToken = getActiveSessionToken();
   const access = getResolvedRequestAccess();
   const selectedOc = document.getElementById("appointmentOc").value;
@@ -953,17 +960,20 @@ async function requestAppointment() {
   if (!access || (!access.providerId && !access.vendorCode && !access.email)) {
     renderRequestFeedback("Primero inicia sesión con una cuenta válida.", "error");
     hideGlobalMessage();
+    requestAppointmentInFlight = false;
     return;
   }
   if (!selectedSlot) {
     renderRequestFeedback("Selecciona una hora de inicio disponible.", "error");
     hideGlobalMessage();
+    requestAppointmentInFlight = false;
     return;
   }
   if (!selectedOc) {
     renderRequestFeedback("Selecciona una OC abierta para continuar.", "error");
     hideGlobalMessage();
     document.getElementById("appointmentOc").focus();
+    requestAppointmentInFlight = false;
     return;
   }
 
@@ -990,6 +1000,9 @@ async function requestAppointment() {
     hideGlobalMessage();
     const successMessage = response.message || "Tu solicitud de cita fue registrada correctamente.";
     const createdAppointment = response.appointment || null;
+    if (runId !== requestAppointmentRunId) {
+      return;
+    }
 
     if (createdAppointment) {
       appointmentsState = mergeAppointmentIntoState(createdAppointment, appointmentsState);
@@ -1002,9 +1015,13 @@ async function requestAppointment() {
         appointmentsState = mergeAppointmentIntoState(createdAppointment, appointmentsState);
         renderAppointments(appointmentsState);
       }
-      renderRequestFeedback(successMessage, "success");
+      if (runId === requestAppointmentRunId) {
+        renderRequestFeedback(successMessage, "success");
+      }
     } catch (error) {
-      renderRequestFeedback("La cita fue registrada correctamente. Si no ves el cambio completo de inmediato, actualiza el panel nuevamente.", "success");
+      if (runId === requestAppointmentRunId) {
+        renderRequestFeedback("La cita fue registrada correctamente. Si no ves el cambio completo de inmediato, actualiza el panel nuevamente.", "success");
+      }
     }
 
     selectedSlot = null;
@@ -1015,10 +1032,15 @@ async function requestAppointment() {
     updateRequestAvailabilityState();
 
   } catch (error) {
-    renderRequestFeedback(error.message || "No pudimos registrar tu solicitud en este momento. Intenta nuevamente en unos minutos.", "error");
-    hideGlobalMessage();
+    if (runId === requestAppointmentRunId) {
+      renderRequestFeedback(error.message || "No pudimos registrar tu solicitud en este momento. Intenta nuevamente en unos minutos.", "error");
+      hideGlobalMessage();
+    }
   } finally {
     releaseBusy();
+    if (runId === requestAppointmentRunId) {
+      requestAppointmentInFlight = false;
+    }
     updateRequestAvailabilityState();
   }
 }
