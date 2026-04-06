@@ -954,7 +954,7 @@ async function requestAppointment() {
   requestAppointmentInFlight = true;
   const runId = ++requestAppointmentRunId;
   const activeToken = getActiveSessionToken();
-  const access = getStableProviderIdentity();
+  const access = buildAppointmentRequestAccess();
   const selectedOc = document.getElementById("appointmentOc").value;
   if (!selectedSlot) {
     renderRequestFeedback("Selecciona una hora de inicio disponible.", "error");
@@ -966,6 +966,12 @@ async function requestAppointment() {
     renderRequestFeedback("Selecciona una OC abierta para continuar.", "error");
     showMessage("Selecciona una OC abierta para continuar.", "error");
     document.getElementById("appointmentOc").focus();
+    requestAppointmentInFlight = false;
+    return;
+  }
+  if (!access) {
+    renderRequestFeedback("No pudimos identificar tu cuenta activa para registrar la cita. Cierra sesión e ingresa nuevamente.", "error");
+    showMessage("No pudimos identificar tu cuenta activa para registrar la cita. Cierra sesión e ingresa nuevamente.", "error");
     requestAppointmentInFlight = false;
     return;
   }
