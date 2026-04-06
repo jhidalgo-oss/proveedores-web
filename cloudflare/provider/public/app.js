@@ -1015,7 +1015,7 @@ async function requestAppointment() {
     document.getElementById("selectedSlotLabel").textContent = "Ninguna";
     document.getElementById("appointmentNotes").value = "";
     renderDurationHint();
-    renderCalendarSelection();
+    renderCurrentCalendarWeek();
     updateRequestAvailabilityState();
     renderRequestFeedback(
       createdAppointment
