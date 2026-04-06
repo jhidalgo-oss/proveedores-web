@@ -955,11 +955,11 @@ async function requestAppointment() {
   requestAppointmentInFlight = true;
   const runId = ++requestAppointmentRunId;
   const activeToken = getActiveSessionToken();
-  const access = getResolvedRequestAccess();
+  const access = buildAppointmentRequestAccess();
   const selectedOc = document.getElementById("appointmentOc").value;
 
   if (!access || (!access.providerId && !access.vendorCode && !access.email)) {
-    renderRequestFeedback("Primero inicia sesión con una cuenta válida.", "error");
+    renderRequestFeedback("No pudimos identificar la cuenta activa para esta solicitud. Cierra sesión e ingresa nuevamente.", "error");
     hideGlobalMessage();
     requestAppointmentInFlight = false;
     return;
@@ -1010,27 +1010,25 @@ async function requestAppointment() {
       renderAppointments(appointmentsState);
     }
 
-    try {
-      await refreshDashboard({ preserveShell: true });
-      if (createdAppointment) {
-        appointmentsState = mergeAppointmentIntoState(createdAppointment, appointmentsState);
-        renderAppointments(appointmentsState);
-      }
-      if (runId === requestAppointmentRunId) {
-        renderRequestFeedback(successMessage, "success");
-      }
-    } catch (error) {
-      if (runId === requestAppointmentRunId) {
-        renderRequestFeedback("La cita fue registrada correctamente. Si no ves el cambio completo de inmediato, actualiza el panel nuevamente.", "success");
-      }
-    }
-
     selectedSlot = null;
     document.getElementById("selectedSlotLabel").textContent = "Ninguna";
     document.getElementById("appointmentNotes").value = "";
     renderDurationHint();
     renderCalendarSelection();
     updateRequestAvailabilityState();
+    renderRequestFeedback(successMessage, "success");
+
+    try {
+      await refreshDashboard({ preserveShell: true });
+      if (createdAppointment) {
+        appointmentsState = mergeAppointmentIntoState(createdAppointment, appointmentsState);
+        renderAppointments(appointmentsState);
+      }
+    } catch (error) {
+      if (runId === requestAppointmentRunId) {
+        renderRequestFeedback("La cita fue registrada correctamente. Si no ves el cambio completo de inmediato, actualiza el panel nuevamente.", "success");
+      }
+    }
 
   } catch (error) {
     if (runId === requestAppointmentRunId) {
@@ -1044,6 +1042,68 @@ async function requestAppointment() {
     }
     updateRequestAvailabilityState();
   }
+}
+
+function buildAppointmentRequestAccess() {
+  const sources = [
+    currentAccess,
+    getCurrentAccess(),
+    getAccountIdentity(),
+    providerState,
+    getPersistedAccessSnapshot(),
+    readSummaryAccessIdentity()
+  ];
+
+  const resolved = sources.reduce(function (accumulator, source) {
+    if (!source) {
+      return accumulator;
+    }
+    if (!accumulator.providerId && source.providerId) {
+      accumulator.providerId = String(source.providerId || "").trim();
+    }
+    if (!accumulator.vendorCode && source.vendorCode) {
+      accumulator.vendorCode = String(source.vendorCode || "").trim();
+    }
+    if (!accumulator.email && source.email) {
+      accumulator.email = String(source.email || "").trim();
+    }
+    return accumulator;
+  }, {
+    providerId: "",
+    vendorCode: "",
+    email: ""
+  });
+
+  if (!resolved.providerId && !resolved.vendorCode && !resolved.email) {
+    return null;
+  }
+
+  resolved.sessionToken = String(getActiveSessionToken() || "").trim();
+  currentAccess = resolved;
+  syncAccountIdentity(resolved);
+  return resolved;
+}
+
+function readSummaryAccessIdentity() {
+  const summary = document.getElementById("providerSummary");
+  if (!summary) {
+    return null;
+  }
+  const text = String(summary.textContent || "").trim();
+  if (!text) {
+    return null;
+  }
+  const vendorCodeMatch = text.match(/Código de proveedor:\s*([^|\s]+)/i);
+  const emailMatch = text.match(/Correo:\s*([^\s]+)/i);
+  const identity = {
+    providerId: "",
+    vendorCode: vendorCodeMatch ? String(vendorCodeMatch[1] || "").trim() : "",
+    email: emailMatch ? String(emailMatch[1] || "").trim() : ""
+  };
+  if (!identity.vendorCode && !identity.email) {
+    return null;
+  }
+  return identity;
 }
 
 function mergeAppointmentIntoState(appointment, currentList) {
