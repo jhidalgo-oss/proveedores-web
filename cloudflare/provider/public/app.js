@@ -954,21 +954,17 @@ async function requestAppointment() {
   requestAppointmentInFlight = true;
   const runId = ++requestAppointmentRunId;
   const activeToken = getActiveSessionToken();
-  const access = buildAppointmentRequestAccess() || {
-    providerId: "",
-    vendorCode: "",
-    email: ""
-  };
+  const access = getStableProviderIdentity();
   const selectedOc = document.getElementById("appointmentOc").value;
   if (!selectedSlot) {
     renderRequestFeedback("Selecciona una hora de inicio disponible.", "error");
-    hideGlobalMessage();
+    showMessage("Selecciona una hora de inicio disponible.", "error");
     requestAppointmentInFlight = false;
     return;
   }
   if (!selectedOc) {
     renderRequestFeedback("Selecciona una OC abierta para continuar.", "error");
-    hideGlobalMessage();
+    showMessage("Selecciona una OC abierta para continuar.", "error");
     document.getElementById("appointmentOc").focus();
     requestAppointmentInFlight = false;
     return;
@@ -976,6 +972,7 @@ async function requestAppointment() {
 
   const releaseBusy = setBusyState(document.getElementById("requestAppointmentButton"), true);
   hideGlobalMessage();
+  renderPersistentWarning("");
   renderRequestFeedback("Registrando tu solicitud de cita...", "loading");
 
   try {
@@ -985,9 +982,9 @@ async function requestAppointment() {
     hideAccessMessage();
     const response = await api("requestAppointment", {
       sessionToken: activeToken || "",
-      providerId: access.providerId || "",
-      vendorCode: access.vendorCode || "",
-      email: access.email || "",
+      providerId: access && access.providerId || "",
+      vendorCode: access && access.vendorCode || "",
+      email: access && access.email || "",
       startIso: selectedSlot.startIso,
       durationMinutes: getSelectedDurationMinutes(),
       ocNumber: selectedOc,
@@ -1020,11 +1017,13 @@ async function requestAppointment() {
         : successMessage,
       "success"
     );
+    showMessage(successMessage, "success");
 
   } catch (error) {
     if (runId === requestAppointmentRunId) {
-      renderRequestFeedback(error.message || "No pudimos registrar tu solicitud en este momento. Intenta nuevamente en unos minutos.", "error");
-      hideGlobalMessage();
+      const message = error.message || "No pudimos registrar tu solicitud en este momento. Intenta nuevamente en unos minutos.";
+      renderRequestFeedback(message, "error");
+      showMessage(message, "error");
     }
   } finally {
     releaseBusy();
@@ -1068,10 +1067,55 @@ function clearInvalidSessionRequestFeedbackIfReady() {
   if (!isSessionError) {
     return;
   }
-  const access = buildAppointmentRequestAccess();
-  if (access && (access.providerId || access.vendorCode || access.email)) {
+  const hasSlot = Boolean(selectedSlot);
+  const hasOc = Boolean(document.getElementById("appointmentOc").value);
+  const access = getStableProviderIdentity();
+  if ((hasSlot && hasOc) || (access && (access.providerId || access.vendorCode || access.email))) {
     renderRequestFeedback("", "");
   }
+}
+
+function getStableProviderIdentity() {
+  const sources = [
+    providerState,
+    currentAccess,
+    getAccountIdentity(),
+    getPersistedAccessSnapshot(),
+    readSummaryAccessIdentity()
+  ];
+
+  const resolved = sources.reduce(function (accumulator, source) {
+    if (!source) {
+      return accumulator;
+    }
+    if (!accumulator.providerId && source.providerId) {
+      accumulator.providerId = String(source.providerId || "").trim();
+    }
+    if (!accumulator.vendorCode && source.vendorCode) {
+      accumulator.vendorCode = String(source.vendorCode || "").trim();
+    }
+    if (!accumulator.email && source.email) {
+      accumulator.email = String(source.email || "").trim();
+    }
+    return accumulator;
+  }, {
+    providerId: "",
+    vendorCode: "",
+    email: ""
+  });
+
+  if (!resolved.providerId && !resolved.vendorCode && !resolved.email) {
+    return null;
+  }
+
+  currentAccess = {
+    providerId: resolved.providerId,
+    vendorCode: resolved.vendorCode,
+    email: resolved.email,
+    sessionToken: String(getActiveSessionToken() || "").trim()
+  };
+  syncAccountIdentity(currentAccess);
+  return currentAccess;
 }
 
 function buildAppointmentRequestAccess() {
