@@ -1052,6 +1052,7 @@ async function requestAppointment() {
   }
   requestAppointmentInFlight = true;
   const activeToken = String(getActiveSessionToken() || "").trim();
+  const access = buildAppointmentRequestAccess();
   const selectedOc = document.getElementById("appointmentOc").value;
   if (!selectedSlot) {
     renderRequestFeedback("Selecciona una hora de inicio disponible.", "error");
@@ -1072,7 +1073,10 @@ async function requestAppointment() {
     startIso: selectedSlot.startIso,
     durationMinutes: getSelectedDurationMinutes(),
     ocNumber: selectedOc || "",
-    hasSessionToken: Boolean(activeToken)
+    hasSessionToken: Boolean(activeToken),
+    providerId: access && access.providerId ? access.providerId : "",
+    vendorCode: access && access.vendorCode ? access.vendorCode : "",
+    email: access && access.email ? access.email : ""
   });
 
   try {
@@ -1080,6 +1084,9 @@ async function requestAppointment() {
     hideAccessMessage();
     const payload = {
       sessionToken: activeToken,
+      providerId: access && access.providerId ? access.providerId : "",
+      vendorCode: access && access.vendorCode ? access.vendorCode : "",
+      email: access && access.email ? access.email : "",
       startIso: selectedSlot.startIso,
       durationMinutes: getSelectedDurationMinutes(),
       ocNumber: selectedOc || "",
@@ -1087,6 +1094,9 @@ async function requestAppointment() {
     };
     const response = await api("requestAppointment", {
       sessionToken: payload.sessionToken,
+      providerId: payload.providerId,
+      vendorCode: payload.vendorCode,
+      email: payload.email,
       startIso: payload.startIso,
       durationMinutes: payload.durationMinutes,
       ocNumber: payload.ocNumber,

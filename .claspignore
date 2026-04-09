@@ -1,3 +1,5 @@
 cloudflare/**
 README.md
 **/*.md
+_prod_app.js
+_prod_app.js
