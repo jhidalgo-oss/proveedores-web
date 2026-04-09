@@ -1081,6 +1081,9 @@ async function requestAppointment() {
 
   try {
     sessionToken = activeToken;
+    if (activeToken) {
+      localStorage.setItem(SESSION_STORAGE_KEY, activeToken);
+    }
     hideAccessMessage();
     const payload = {
       sessionToken: activeToken,
@@ -1323,8 +1326,26 @@ function clearSession(options) {
   syncAccountIdentity(null, { clearSnapshot: Boolean(options.clearIdentity) });
 }
 
+function getStoredProviderSessionToken() {
+  try {
+    const raw = String(localStorage.getItem(PROVIDER_SESSION_STORAGE_KEY) || "").trim();
+    if (!raw) {
+      return "";
+    }
+    const parsed = JSON.parse(raw);
+    return String(parsed && parsed.sessionToken || "").trim();
+  } catch (error) {
+    return "";
+  }
+}
+
 function getActiveSessionToken() {
-  return String(sessionToken || localStorage.getItem(SESSION_STORAGE_KEY) || "").trim();
+  return String(
+    sessionToken ||
+    localStorage.getItem(SESSION_STORAGE_KEY) ||
+    getStoredProviderSessionToken() ||
+    ""
+  ).trim();
 }
 
 function persistAccessSnapshot(identity) {
