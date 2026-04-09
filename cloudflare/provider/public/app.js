@@ -360,7 +360,7 @@ function renderDashboard(data, options) {
   selectedSlot = null;
   currentCalendarWeeks = [];
   currentWeekIndex = 0;
-  document.getElementById("selectedSlotLabel").textContent = "Ninguna";
+  document.getElementById("selectedSlotLabel").textContent = "Sin selección";
   renderDurationHint();
   document.getElementById("guestAccessBlock").classList.add("hidden");
   document.getElementById("accountPanel").classList.remove("hidden");
@@ -370,8 +370,8 @@ function renderDashboard(data, options) {
   summary.classList.remove("hidden");
   summary.innerHTML = [
     '<div class="status status-' + data.provider.registrationStatus.toLowerCase() + '">' + escapeHtml(data.provider.registrationStatus) + "</div>",
-    "<p><strong>" + escapeHtml(data.provider.vendorName) + "</strong></p>",
-    "<p>C\u00f3digo de proveedor: " + escapeHtml(data.provider.vendorCode) + " | Correo: " + escapeHtml(data.provider.email) + "</p>"
+    '<p class="summary-title">' + escapeHtml(data.provider.vendorName) + "</p>",
+    '<p class="summary-meta">' + escapeHtml(data.provider.vendorCode) + " · " + escapeHtml(data.provider.email) + "</p>"
   ].join("");
 
   const warnings = document.getElementById("warnings");
@@ -414,8 +414,8 @@ function renderAuthenticatedShell(provider) {
   summary.classList.remove("hidden");
   summary.innerHTML = [
     '<div class="status status-' + String(provider.registrationStatus || "pendiente").toLowerCase() + '">' + escapeHtml(provider.registrationStatus || "PENDIENTE") + "</div>",
-    "<p><strong>" + escapeHtml(provider.vendorName || "") + "</strong></p>",
-    "<p>C\u00f3digo de proveedor: " + escapeHtml(provider.vendorCode || "") + " | Correo: " + escapeHtml(provider.email || "") + "</p>"
+    '<p class="summary-title">' + escapeHtml(provider.vendorName || "") + "</p>",
+    '<p class="summary-meta">' + escapeHtml(provider.vendorCode || "") + " · " + escapeHtml(provider.email || "") + "</p>"
   ].join("");
   renderPersistentWarning("");
   clearInvalidSessionRequestFeedbackIfReady();
@@ -543,7 +543,7 @@ function handleDurationChange() {
   const selectedStillValid = selectedSlot && isSlotRangeSelectable(selectedSlot.startIso, durationMinutes);
   if (!selectedStillValid) {
     selectedSlot = null;
-    document.getElementById("selectedSlotLabel").textContent = "Ninguna";
+    document.getElementById("selectedSlotLabel").textContent = "Sin selección";
     if (hadSelection) {
       renderRequestFeedback("La nueva duración ya no cabe en el horario que habías elegido. Selecciona otro inicio.", "error");
     }
@@ -908,12 +908,12 @@ function getTodayInPortalTimezone() {
 
 function updateSelectedSlotLabel() {
   if (!selectedSlot) {
-    document.getElementById("selectedSlotLabel").textContent = "Ninguna";
+    document.getElementById("selectedSlotLabel").textContent = "Sin selección";
     return;
   }
   const match = findDayBySlotStart(selectedSlot.startIso);
   if (!match) {
-    document.getElementById("selectedSlotLabel").textContent = selectedSlot.label || "Ninguna";
+    document.getElementById("selectedSlotLabel").textContent = selectedSlot.label || "Sin selección";
     return;
   }
   document.getElementById("selectedSlotLabel").textContent = buildSelectedSlotText(match.day, selectedSlot, getSelectedDurationMinutes());
@@ -1126,7 +1126,7 @@ async function requestAppointment() {
     renderAppointments(appointmentsState);
 
     selectedSlot = null;
-    document.getElementById("selectedSlotLabel").textContent = "Ninguna";
+    document.getElementById("selectedSlotLabel").textContent = "Sin selección";
     document.getElementById("appointmentNotes").value = "";
     renderDurationHint();
     renderCurrentCalendarWeek();
@@ -1648,9 +1648,8 @@ function showGeneratedCode(vendorCode) {
   const generatedCodeBox = document.getElementById("generatedCodeBox");
   generatedCodeBox.classList.remove("hidden");
   generatedCodeBox.innerHTML = [
-    '<p class="eyebrow">C\u00d3DIGO GENERADO</p>',
-    '<p><strong>' + escapeHtml(vendorCode) + "</strong></p>",
-    "<p>Conserva este c\u00f3digo como referencia de tu cuenta dentro del portal.</p>"
+    '<p class="summary-title">C\u00f3digo de acceso</p>',
+    '<p class="summary-meta"><strong>' + escapeHtml(vendorCode) + "</strong></p>"
   ].join("");
 }
 
