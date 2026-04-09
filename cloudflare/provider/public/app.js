@@ -1,6 +1,7 @@
 const API_BASE = "/api";
 const SESSION_STORAGE_KEY = "providerPortalSessionToken";
 const ACCESS_STORAGE_KEY = "providerPortalAccessSnapshot";
+const PROVIDER_SESSION_STORAGE_KEY = "providerPortalProviderSession";
 
 let boot = null;
 let providerState = null;
@@ -19,9 +20,9 @@ let sessionRestoreRunId = 0;
 let loginAttemptRunId = 0;
 
 document.addEventListener("DOMContentLoaded", async function () {
+  resetProviderView();
   wireEvents();
   await loadBootstrap();
-  resetProviderView();
   // La restauración automática estaba compitiendo con el login manual
   // y a veces desmontaba el panel justo después de abrirlo.
   // Priorizamos estabilidad: la sesión se reconstruye solo después
@@ -205,25 +206,33 @@ async function submitLogin(event) {
     if (runId !== loginAttemptRunId) {
       return;
     }
-    handleAuthenticatedResponse(response);
+    if (!response || !response.provider) {
+      throw new Error("No pudimos abrir tu cuenta en este momento. Intenta nuevamente.");
+    }
+
+    sessionToken = String(response.sessionToken || "").trim();
+    if (sessionToken) {
+      localStorage.setItem(SESSION_STORAGE_KEY, sessionToken);
+    } else {
+      localStorage.removeItem(SESSION_STORAGE_KEY);
+    }
+
+    persistProviderSession(response.provider, sessionToken);
+    setCurrentAccess(response.provider, sessionToken);
+    renderAuthenticatedShell(response.provider);
+    renderRequestFeedback("", "");
+    renderPersistentWarning("");
+
     if (hasRenderableDashboard(response.dashboard)) {
+      renderDashboard(response.dashboard, { preserveShell: true, fromLogin: true });
       hideGlobalMessage();
       hideAccessMessage();
-    } else {
-      showMessage("Ingreso correcto. Estamos terminando de cargar tu panel...", "loading");
-      try {
-        await refreshDashboard({
-          preserveShell: true,
-          suppressNotFoundWarning: true,
-          identityFallback: getResolvedRequestAccess()
-        });
-        hideGlobalMessage();
-        hideAccessMessage();
-      } catch (dashboardError) {
-        console.warn("No pudimos completar la carga del panel después del login.", dashboardError);
-        renderPersistentWarning("No pudimos terminar de cargar tu panel en este momento. Intenta actualizar nuevamente.");
-      }
+      return;
     }
+    renderPersistentWarning(
+      (response.dashboard && response.dashboard.message) ||
+      "Tu sesión fue iniciada, pero no pudimos cargar todo el panel en este momento. Pulsa Actualizar para intentarlo de nuevo."
+    );
   } catch (error) {
     if (runId === loginAttemptRunId) {
       showMessage(error.message || "No pudimos iniciar sesi\u00f3n en este momento.", "error");
@@ -293,9 +302,12 @@ function handleAuthenticatedResponse(response) {
   sessionToken = response.sessionToken || "";
   if (sessionToken) {
     localStorage.setItem(SESSION_STORAGE_KEY, sessionToken);
+  } else {
+    localStorage.removeItem(SESSION_STORAGE_KEY);
   }
   sessionRestoreRunId += 1;
   if (response.provider) {
+    persistProviderSession(response.provider, sessionToken);
     setCurrentAccess(response.provider, sessionToken);
   }
   if (response.provider) {
@@ -309,21 +321,14 @@ function handleAuthenticatedResponse(response) {
 
 async function refreshDashboard(options) {
   options = options || {};
-  const activeToken = getActiveSessionToken();
-  const access =
-    options.identityFallback ||
-    getResolvedRequestAccess() ||
-    buildAppointmentRequestAccess();
-  if (!activeToken && !access) {
+  const activeToken = String(getActiveSessionToken() || "").trim();
+  if (!activeToken) {
     return null;
   }
   sessionToken = activeToken;
 
   const data = await api("providerDashboard", {
     sessionToken: activeToken,
-    providerId: access && access.providerId || "",
-    vendorCode: access && access.vendorCode || "",
-    email: access && access.email || "",
     startDate: boot && boot.today ? boot.today : null
   });
   renderDashboard(data, options);
@@ -333,22 +338,13 @@ async function refreshDashboard(options) {
 function renderDashboard(data, options) {
   options = options || {};
   if (!data.found) {
-    if (providerState) {
-      const normalizedMessage = String(data.message || "").toLowerCase();
-      if (
-        options.suppressNotFoundWarning ||
-        normalizedMessage.indexOf("no encontramos una cuenta activa") >= 0 ||
-        normalizedMessage.indexOf("primero inicia sesi") >= 0
-      ) {
-        return;
-      }
+    if (isAccessShellAuthenticated()) {
       renderPersistentWarning(data.message || "No pudimos terminar de cargar tu panel en este momento. Intenta actualizar nuevamente.");
       return;
     }
-
-    clearSession();
-    resetProviderView();
-    showMessage(data.message || "No encontramos tu cuenta.", "error");
+    if (!options.silent) {
+      renderPersistentWarning(data.message || "No pudimos terminar de cargar tu panel en este momento. Intenta actualizar nuevamente.");
+    }
     return;
   }
 
@@ -357,6 +353,7 @@ function renderDashboard(data, options) {
   activateTab("loginPanel");
   setAccessAuthenticatedMode(true);
   providerState = data.provider;
+  persistProviderSession(data.provider, sessionToken);
   setCurrentAccess(data.provider, sessionToken);
   appointmentsState = mergeAppointmentsState(data.appointments || [], optimisticAppointmentsState);
   pendingPurchaseOrdersState = data.pendingPurchaseOrders || [];
@@ -423,6 +420,14 @@ function renderAuthenticatedShell(provider) {
   renderPersistentWarning("");
   clearInvalidSessionRequestFeedbackIfReady();
   updateRequestAvailabilityState();
+}
+
+function queueProviderDashboardSync() {
+  window.setTimeout(function () {
+    refreshDashboard({ silent: true }).catch(function (error) {
+      console.warn("[provider] dashboard sync failed", error);
+    });
+  }, 1200);
 }
 
 function renderPendingPurchaseOrders() {
@@ -1046,22 +1051,15 @@ async function requestAppointment() {
     return;
   }
   requestAppointmentInFlight = true;
-  const activeToken = String(localStorage.getItem(SESSION_STORAGE_KEY) || getActiveSessionToken() || "").trim();
-  const access = buildAppointmentRequestAccess() || getResolvedRequestAccess() || getStableProviderIdentity();
+  const activeToken = String(getActiveSessionToken() || "").trim();
   const selectedOc = document.getElementById("appointmentOc").value;
   if (!selectedSlot) {
     renderRequestFeedback("Selecciona una hora de inicio disponible.", "error");
     requestAppointmentInFlight = false;
     return;
   }
-  if (!selectedOc) {
-    renderRequestFeedback("Selecciona una OC abierta para continuar.", "error");
-    document.getElementById("appointmentOc").focus();
-    requestAppointmentInFlight = false;
-    return;
-  }
-  if (!activeToken && !access) {
-    renderRequestFeedback("No pudimos identificar tu cuenta activa para registrar la cita. Cierra sesión e ingresa nuevamente.", "error");
+  if (!activeToken) {
+    renderRequestFeedback("Tu sesión ya no está disponible. Cierra sesión e ingresa nuevamente.", "error");
     requestAppointmentInFlight = false;
     return;
   }
@@ -1070,21 +1068,29 @@ async function requestAppointment() {
   hideGlobalMessage();
   renderPersistentWarning("");
   renderRequestFeedback("Registrando tu solicitud de cita...", "loading");
+  console.info("[provider] requestAppointment:start", {
+    startIso: selectedSlot.startIso,
+    durationMinutes: getSelectedDurationMinutes(),
+    ocNumber: selectedOc || "",
+    hasSessionToken: Boolean(activeToken)
+  });
 
   try {
-    if (activeToken) {
-      sessionToken = activeToken;
-    }
+    sessionToken = activeToken;
     hideAccessMessage();
-    const response = await api("requestAppointment", {
-      sessionToken: activeToken || "",
-      providerId: access && access.providerId || "",
-      vendorCode: access && access.vendorCode || "",
-      email: access && access.email || "",
+    const payload = {
+      sessionToken: activeToken,
       startIso: selectedSlot.startIso,
       durationMinutes: getSelectedDurationMinutes(),
-      ocNumber: selectedOc,
+      ocNumber: selectedOc || "",
       notes: document.getElementById("appointmentNotes").value
+    };
+    const response = await api("requestAppointment", {
+      sessionToken: payload.sessionToken,
+      startIso: payload.startIso,
+      durationMinutes: payload.durationMinutes,
+      ocNumber: payload.ocNumber,
+      notes: payload.notes
     });
 
     hideGlobalMessage();
@@ -1094,6 +1100,11 @@ async function requestAppointment() {
     if (!createdAppointment) {
       throw new Error(successMessage || "La cita no pudo confirmarse con claridad. Intenta nuevamente.");
     }
+    console.info("[provider] requestAppointment:success", {
+      appointmentId: createdAppointment.appointmentId || "",
+      slotLabel: createdAppointment.slotLabel || "",
+      ocNumber: createdAppointment.ocNumber || ""
+    });
 
     optimisticAppointmentsState = mergeAppointmentIntoState(createdAppointment, optimisticAppointmentsState);
     appointmentsState = mergeAppointmentIntoState(createdAppointment, appointmentsState);
@@ -1108,8 +1119,10 @@ async function requestAppointment() {
     renderCurrentCalendarWeek();
     updateRequestAvailabilityState();
     renderRequestFeedback("Tu solicitud de cita fue registrada correctamente y ya aparece en tu historial.", "success");
+    queueProviderDashboardSync();
 
   } catch (error) {
+    console.error("[provider] requestAppointment:error", error);
     const message = error && typeof error.message === "string" && error.message.trim()
       ? error.message
       : "Ocurrió un error de conexión o la solicitud tardó demasiado. Intenta nuevamente.";
@@ -1147,17 +1160,17 @@ function clearInvalidSessionRequestFeedbackIfReady() {
     return;
   }
   const hasSlot = Boolean(selectedSlot);
-  const hasOc = Boolean(document.getElementById("appointmentOc").value);
-  const access = getStableProviderIdentity();
-  if ((hasSlot && hasOc) || (access && (access.providerId || access.vendorCode || access.email))) {
+  const hasSession = Boolean(getActiveSessionToken());
+  if (hasSlot || hasSession) {
     renderRequestFeedback("", "");
   }
 }
 
-function getStableProviderIdentity() {
+function getActiveProviderIdentity() {
   const sources = [
-    providerState,
+    getProviderSession(),
     currentAccess,
+    providerState,
     getAccountIdentity(),
     getPersistedAccessSnapshot(),
     readSummaryAccessIdentity()
@@ -1176,65 +1189,38 @@ function getStableProviderIdentity() {
     if (!accumulator.email && source.email) {
       accumulator.email = String(source.email || "").trim();
     }
+    if (!accumulator.vendorName && source.vendorName) {
+      accumulator.vendorName = String(source.vendorName || "").trim();
+    }
+    if (!accumulator.registrationStatus && source.registrationStatus) {
+      accumulator.registrationStatus = String(source.registrationStatus || "").trim();
+    }
     return accumulator;
   }, {
     providerId: "",
     vendorCode: "",
-    email: ""
+    email: "",
+    vendorName: "",
+    registrationStatus: ""
   });
 
   if (!resolved.providerId && !resolved.vendorCode && !resolved.email) {
     return null;
   }
 
-  currentAccess = {
-    providerId: resolved.providerId,
-    vendorCode: resolved.vendorCode,
-    email: resolved.email,
-    sessionToken: String(getActiveSessionToken() || "").trim()
-  };
-  syncAccountIdentity(currentAccess);
-  return currentAccess;
+  resolved.sessionToken = String(getActiveSessionToken() || (getProviderSession() && getProviderSession().sessionToken) || "").trim();
+  currentAccess = resolved;
+  persistProviderSession(resolved, resolved.sessionToken);
+  syncAccountIdentity(resolved);
+  return resolved;
+}
+
+function getStableProviderIdentity() {
+  return getActiveProviderIdentity();
 }
 
 function buildAppointmentRequestAccess() {
-  const sources = [
-    currentAccess,
-    getCurrentAccess(),
-    getAccountIdentity(),
-    providerState,
-    getPersistedAccessSnapshot(),
-    readSummaryAccessIdentity()
-  ];
-
-  const resolved = sources.reduce(function (accumulator, source) {
-    if (!source) {
-      return accumulator;
-    }
-    if (!accumulator.providerId && source.providerId) {
-      accumulator.providerId = String(source.providerId || "").trim();
-    }
-    if (!accumulator.vendorCode && source.vendorCode) {
-      accumulator.vendorCode = String(source.vendorCode || "").trim();
-    }
-    if (!accumulator.email && source.email) {
-      accumulator.email = String(source.email || "").trim();
-    }
-    return accumulator;
-  }, {
-    providerId: "",
-    vendorCode: "",
-    email: ""
-  });
-
-  if (!resolved.providerId && !resolved.vendorCode && !resolved.email) {
-    return null;
-  }
-
-  resolved.sessionToken = String(getActiveSessionToken() || "").trim();
-  currentAccess = resolved;
-  syncAccountIdentity(resolved);
-  return resolved;
+  return getActiveProviderIdentity();
 }
 
 function readSummaryAccessIdentity() {
@@ -1322,6 +1308,7 @@ function clearSession(options) {
   options = options || {};
   sessionToken = "";
   localStorage.removeItem(SESSION_STORAGE_KEY);
+  localStorage.removeItem(PROVIDER_SESSION_STORAGE_KEY);
   currentAccess = null;
   syncAccountIdentity(null, { clearSnapshot: Boolean(options.clearIdentity) });
 }
@@ -1345,6 +1332,67 @@ function persistAccessSnapshot(identity) {
     return;
   }
   localStorage.setItem(ACCESS_STORAGE_KEY, JSON.stringify(snapshot));
+}
+
+function persistProviderSession(provider, token) {
+  if (!provider) {
+    localStorage.removeItem(PROVIDER_SESSION_STORAGE_KEY);
+    return;
+  }
+  const session = {
+    providerId: String(provider.providerId || "").trim(),
+    vendorCode: String(provider.vendorCode || "").trim(),
+    email: String(provider.email || "").trim(),
+    vendorName: String(provider.vendorName || "").trim(),
+    registrationStatus: String(provider.registrationStatus || "").trim(),
+    sessionToken: String(token || getActiveSessionToken() || "").trim()
+  };
+  if (!session.providerId && !session.vendorCode && !session.email) {
+    localStorage.removeItem(PROVIDER_SESSION_STORAGE_KEY);
+    return;
+  }
+  localStorage.setItem(PROVIDER_SESSION_STORAGE_KEY, JSON.stringify(session));
+}
+
+function getProviderSession() {
+  const provider = providerState && (
+    providerState.providerId || providerState.vendorCode || providerState.email
+  ) ? {
+    providerId: String(providerState.providerId || "").trim(),
+    vendorCode: String(providerState.vendorCode || "").trim(),
+    email: String(providerState.email || "").trim(),
+    vendorName: String(providerState.vendorName || "").trim(),
+    registrationStatus: String(providerState.registrationStatus || "").trim(),
+    sessionToken: String(getActiveSessionToken() || "").trim()
+  } : null;
+  if (provider) {
+    persistProviderSession(provider, provider.sessionToken);
+    return provider;
+  }
+  try {
+    const raw = String(localStorage.getItem(PROVIDER_SESSION_STORAGE_KEY) || "").trim();
+    if (!raw) {
+      return null;
+    }
+    const parsed = JSON.parse(raw);
+    const session = {
+      providerId: String(parsed.providerId || "").trim(),
+      vendorCode: String(parsed.vendorCode || "").trim(),
+      email: String(parsed.email || "").trim(),
+      vendorName: String(parsed.vendorName || "").trim(),
+      registrationStatus: String(parsed.registrationStatus || "").trim(),
+      sessionToken: String(getActiveSessionToken() || parsed.sessionToken || "").trim()
+    };
+    if (!session.providerId && !session.vendorCode && !session.email) {
+      localStorage.removeItem(PROVIDER_SESSION_STORAGE_KEY);
+      return null;
+    }
+    return session;
+  } catch (error) {
+    console.warn("No pudimos leer la sesión persistida del proveedor.", error);
+    localStorage.removeItem(PROVIDER_SESSION_STORAGE_KEY);
+    return null;
+  }
 }
 
 function getPersistedAccessSnapshot() {
@@ -1503,10 +1551,9 @@ function updateRequestAvailabilityState() {
     return;
   }
   const hasSlot = Boolean(selectedSlot);
-  const hasOc = Boolean(document.getElementById("appointmentOc").value);
-  button.disabled = !(hasSlot && hasOc) || requestAppointmentInFlight;
+  button.disabled = !hasSlot || requestAppointmentInFlight;
   button.classList.toggle("is-disabled", button.disabled);
-  if (hasSlot && hasOc) {
+  if (hasSlot) {
     if (isAccessShellAuthenticated()) {
       hideGlobalMessage();
       hideAccessMessage();

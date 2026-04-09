@@ -1010,8 +1010,10 @@ function validateSlotRequest_(dateTime, durationMinutes) {
   if (!isBusinessDay_(dateTime)) {
     throw new Error('Solo se atiende de lunes a sabado.');
   }
-  if (dateTime < makeDateTime_(formatDate_(new Date()), 0, 0)) {
-    throw new Error('No se pueden solicitar citas en el pasado.');
+  var todayText = formatDate_(new Date());
+  var requestedDateText = formatDate_(dateTime);
+  if (requestedDateText <= todayText) {
+    throw new Error('Las citas deben solicitarse con al menos un dia de anticipacion.');
   }
   var limit = addDays_(new Date(), config.maxAdvanceDays);
   if (dateTime > limit) {
@@ -2022,7 +2024,10 @@ function getProviderDashboard(criteria) {
   criteria = criteria || {};
   var provider = criteria.sessionToken
     ? getProviderBySession_(criteria.sessionToken)
-    : findProvider_(criteria);
+    : null;
+  if (!provider) {
+    provider = findProvider_(criteria);
+  }
   if (!provider) {
     return {
       found: false,
@@ -2223,84 +2228,90 @@ function recoverEmailByTaxId(payload) {
 function requestAppointment(payload) {
   ensureSheets_();
   payload = payload || {};
-  var clean = normalizeAppointmentRequest_(payload);
-  var provider = clean.sessionToken
-    ? getProviderBySession_(clean.sessionToken)
-    : findProvider_({
-        providerId: clean.providerId,
-        vendorCode: clean.vendorCode,
-        email: clean.email
-      });
+  try {
+    var clean = normalizeAppointmentRequest_(payload);
+    var provider = clean.sessionToken ? getProviderBySession_(clean.sessionToken) : null;
 
-  if (!provider) {
-    throw new Error('Primero inicia sesion con una cuenta valida.');
-  }
-  if (provider.registrationStatus !== PROVIDER_STATUS.APPROVED) {
-    throw new Error('El proveedor aun no esta aprobado por Grupo Santis.');
-  }
-  if (!clean.ocNumber) {
-    throw new Error('Selecciona una OC abierta para continuar.');
-  }
+    audit_(
+      'CITA_SOLICITUD_DEBUG',
+      clean.ocNumber || 'SIN_OC',
+      'session=' + (clean.sessionToken ? 'SI' : 'NO'),
+      'start=' + clean.startIso + ' duration=' + clean.durationMinutes
+    );
 
-  var selectedOpenOrder = getPendingPurchaseOrderForProvider_(provider, clean.ocNumber);
-  if (!selectedOpenOrder) {
-    throw new Error('La OC seleccionada ya no esta disponible o no cumple las condiciones para agenda.');
+    if (!provider) {
+      throw new Error('Tu sesion vencio o no es valida. Cierra sesion e ingresa nuevamente.');
+    }
+
+    var slotStart = parseLocalDateTime_(clean.startIso);
+    if (!slotStart) {
+      throw new Error('Selecciona una hora valida.');
+    }
+    var durationMinutes = normalizeDurationMinutes_(clean.durationMinutes || getRuntimeConfig_().slotMinutes);
+    var slotEnd = addMinutes_(slotStart, durationMinutes);
+    assertTimeRangeAvailable_(slotStart, slotEnd, '');
+
+    var selectedOpenOrder = null;
+    if (clean.ocNumber) {
+      selectedOpenOrder = getPendingPurchaseOrdersByPoNumber_(clean.ocNumber)[0] || null;
+      if (!selectedOpenOrder) {
+        audit_('CITA_SOLICITUD_WARN', clean.ocNumber, provider.email, 'OC no encontrada en SAP_OC_PENDIENTES; continua sin snapshot.');
+      }
+    }
+
+    var appointment = {
+      appointmentId: nextId_('CIT'),
+      providerId: provider.providerId,
+      vendorCode: provider.vendorCode,
+      sapVendorCode: provider.sapVendorCode || '',
+      vendorName: provider.vendorName,
+      email: provider.email,
+      ocNumber: clean.ocNumber || provider.ocNumber || '',
+      ocArea: '',
+      ocBuyerName: '',
+      ocItemGroups: '',
+      ocItemsSummary: '',
+      ocDeliveryDate: '',
+      ocLineCount: '',
+      requestedStart: clean.startIso,
+      requestedEnd: formatDateTime_(slotEnd),
+      effectiveStart: clean.startIso,
+      effectiveEnd: formatDateTime_(slotEnd),
+      durationMinutes: String(durationMinutes),
+      slotDate: formatDate_(slotStart),
+      slotLabel: formatSlotLabel_(slotStart, slotEnd),
+      appointmentStatus: APPOINTMENT_STATUS.PENDING,
+      outsideSchedule: 'NO',
+      requestedAt: nowIso_(),
+      approvedAt: '',
+      approvedBy: '',
+      accessCode: '',
+      mailSentAt: '',
+      notes: clean.notes
+    };
+
+    if (selectedOpenOrder) {
+      appointment.ocNumber = selectedOpenOrder.poNumber || appointment.ocNumber || '';
+      applyPurchaseOrderSnapshot_(appointment, selectedOpenOrder);
+    }
+
+    saveRecord_(APP_DEFAULTS.sheets.appointments, appointment, 'appointmentId');
+    audit_('CITA_SOLICITADA', appointment.appointmentId, provider.email, appointment.slotLabel);
+
+    return {
+      ok: true,
+      message: 'Tu solicitud de cita fue registrada y queda pendiente de aprobacion.',
+      appointment: cleanRow_(appointment)
+    };
+  } catch (error) {
+    audit_('CITA_SOLICITUD_ERROR', 'PORTAL', (payload && payload.email) || 'PORTAL', String(error && error.message || error));
+    throw error;
   }
-
-  var slotStart = parseLocalDateTime_(clean.startIso);
-  var durationMinutes = normalizeDurationMinutes_(clean.durationMinutes || getRuntimeConfig_().slotMinutes);
-  validateSlotRequest_(slotStart, durationMinutes);
-  if (!isWithinSchedule_(slotStart, durationMinutes)) {
-    throw new Error('El tiempo estimado supera el horario disponible para ese inicio.');
-  }
-  var slotEnd = addMinutes_(slotStart, durationMinutes);
-  assertTimeRangeAvailable_(slotStart, slotEnd, '');
-  var appointment = {
-    appointmentId: nextId_('CIT'),
-    providerId: provider.providerId,
-    vendorCode: provider.vendorCode,
-    sapVendorCode: provider.sapVendorCode || '',
-    vendorName: provider.vendorName,
-    email: provider.email,
-    ocNumber: selectedOpenOrder.poNumber,
-    ocArea: '',
-    ocBuyerName: '',
-    ocItemGroups: '',
-    ocItemsSummary: '',
-    ocDeliveryDate: '',
-    ocLineCount: '',
-    requestedStart: clean.startIso,
-    requestedEnd: formatDateTime_(slotEnd),
-    effectiveStart: clean.startIso,
-    effectiveEnd: formatDateTime_(slotEnd),
-    durationMinutes: String(durationMinutes),
-    slotDate: formatDate_(slotStart),
-    slotLabel: formatSlotLabel_(slotStart, slotEnd),
-    appointmentStatus: APPOINTMENT_STATUS.PENDING,
-    outsideSchedule: 'NO',
-    requestedAt: nowIso_(),
-    approvedAt: '',
-    approvedBy: '',
-    accessCode: '',
-    mailSentAt: '',
-    notes: clean.notes
-  };
-  applyPurchaseOrderSnapshot_(appointment, selectedOpenOrder);
-  reconcileProviderFromOpenOrder_(provider, [selectedOpenOrder]);
-
-  saveRecord_(APP_DEFAULTS.sheets.appointments, appointment, 'appointmentId');
-  audit_('CITA_SOLICITADA', appointment.appointmentId, provider.email, appointment.slotLabel);
-
-  return {
-    ok: true,
-    message: 'Tu solicitud de cita fue registrada y queda pendiente de aprobacion.',
-    appointment: cleanRow_(appointment)
-  };
 }
 
 function buildProviderDashboardResponse_(provider, startDate) {
   var config = getRuntimeConfig_();
-  var warnings = buildProviderWarnings_(provider, []);
+  var warnings = [];
   var pendingPurchaseOrders = [];
   var appointments = [];
   var calendar = null;
@@ -2325,7 +2336,7 @@ function buildProviderDashboardResponse_(provider, startDate) {
     audit_('PROVIDER_DASHBOARD_WARNING', provider.providerId, provider.email, 'appointments: ' + String(error && error.message || error));
   }
 
-  var canRequestAppointments = provider.registrationStatus === PROVIDER_STATUS.APPROVED && pendingPurchaseOrders.length > 0;
+  var canRequestAppointments = true;
   if (canRequestAppointments) {
     try {
       calendar = buildCalendar_(startDate, config.lookaheadDays, false);
@@ -2497,12 +2508,7 @@ function normalizeAppointmentRequest_(payload) {
   var durationMinutes = normalizeDurationMinutes_(payload.durationMinutes || '');
 
   if (!sessionToken) {
-    if (!providerId && !vendorCode) {
-      throw new Error('Falta la identificación del proveedor.');
-    }
-    if (!providerId && (!email || !isValidEmail_(email))) {
-      throw new Error('Falta un correo valido.');
-    }
+    throw new Error('Falta una sesion valida del proveedor.');
   }
   if (!startIso) {
     throw new Error('Selecciona un horario.');
@@ -2573,8 +2579,8 @@ function buildProviderWarnings_(provider, pendingPurchaseOrders) {
   if (provider.registrationStatus === PROVIDER_STATUS.APPROVED) {
     warnings.push('Si necesitas cambiar tu correo, la actualizacion solo puede hacerla Grupo Santis.');
   }
-  if (provider.registrationStatus === PROVIDER_STATUS.APPROVED && !(pendingPurchaseOrders || []).length) {
-    warnings.push('No tiene OCs abiertas habilitadas en este momento. Cuando SAP cargue una OC con area y material, podra solicitar una cita.');
+  if (!(pendingPurchaseOrders || []).length) {
+    warnings.push('Puedes solicitar una cita aunque aun no tengas una OC abierta asociada. El supervisor validara la informacion antes de aprobar.');
   }
   return warnings;
 }
