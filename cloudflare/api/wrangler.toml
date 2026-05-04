@@ -1,0 +1,16 @@
+name = "proveedores-api"
+main = "src/index.js"
+compatibility_date = "2026-05-03"
+
+[vars]
+ALLOWED_ORIGINS = "https://proveedores.santis.space,https://proveedores-web.pages.dev"
+SESSION_TTL_HOURS = "24"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "proveedores_db"
+database_id = "REPLACE_WITH_D1_DATABASE_ID"
+
+# Configure as encrypted secrets in Cloudflare:
+# wrangler secret put SUPERVISOR_ACCESS_KEY
+# wrangler secret put SAP_SYNC_KEY
