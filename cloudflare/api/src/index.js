@@ -314,7 +314,10 @@ async function reassignAppointment(request, env) {
 async function syncSapPurchaseOrders(request, env) {
   const configuredKey = String(env.SAP_SYNC_KEY || "").trim();
   const providedKey = String(request.headers.get("x-sync-key") || "").trim();
-  if (configuredKey && providedKey !== configuredKey) {
+  if (!configuredKey) {
+    return json({ ok: false, error: "SAP_SYNC_KEY no está configurado." }, 503, request, env);
+  }
+  if (providedKey !== configuredKey) {
     return json({ ok: false, error: "No autorizado." }, 401, request, env);
   }
 
@@ -456,7 +459,7 @@ async function getAppointment(env, id) {
 function requireSupervisor(request, env) {
   const expected = String(env.SUPERVISOR_ACCESS_KEY || "").trim();
   if (!expected) {
-    return null;
+    return json({ ok: false, error: "SUPERVISOR_ACCESS_KEY no está configurado." }, 503, request, env);
   }
   const provided = String(request.headers.get("x-supervisor-key") || "").trim();
   if (provided !== expected) {
