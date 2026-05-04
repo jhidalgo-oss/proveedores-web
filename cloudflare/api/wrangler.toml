@@ -9,7 +9,7 @@ SESSION_TTL_HOURS = "24"
 [[d1_databases]]
 binding = "DB"
 database_name = "proveedores_db"
-database_id = "REPLACE_WITH_D1_DATABASE_ID"
+database_id = "8420a58c-4d52-4b10-9e19-6692ac949df2"
 
 # Configure as encrypted secrets in Cloudflare:
 # wrangler secret put SUPERVISOR_ACCESS_KEY
